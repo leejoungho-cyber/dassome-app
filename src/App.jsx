@@ -107,8 +107,7 @@ function App() {
         />
 
         <label className="label">예약일자 선택</label>
-        <label className="label">예약일자 선택</label>
-
+       
 <input
   type="date"
   name="reservationDate"
