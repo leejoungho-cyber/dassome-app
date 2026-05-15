@@ -1,4 +1,4 @@
-git pushimport { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { db } from "./firebase";
 
 import {
@@ -22,7 +22,6 @@ function App() {
   const [isCompanion, setIsCompanion] = useState(false);
 
   const [search, setSearch] = useState("");
-
   const [notifications, setNotifications] = useState([]);
 
   const [form, setForm] = useState({
@@ -46,7 +45,7 @@ function App() {
 
   async function addNotification(message) {
     await addDoc(collection(db, "notifications"), {
-      message,
+      message: message,
       createdAt: new Date(),
     });
 
@@ -94,7 +93,7 @@ function App() {
       companion: "",
     });
 
-    await addNotification(`${form.name}님 신청 접수`);
+    await addNotification(form.name + "님 신청 접수");
 
     alert("신청이 저장되었습니다.");
 
@@ -119,9 +118,9 @@ function App() {
 
     const snapshot = await getDocs(q);
 
-    const list = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const list = snapshot.docs.map((docItem) => ({
+      id: docItem.id,
+      ...docItem.data(),
     }));
 
     setApplications(list);
@@ -135,9 +134,9 @@ function App() {
 
     const snapshot = await getDocs(q);
 
-    const list = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const list = snapshot.docs.map((docItem) => ({
+      id: docItem.id,
+      ...docItem.data(),
     }));
 
     setNotifications(list);
@@ -148,7 +147,7 @@ function App() {
       status: newStatus,
     });
 
-    await addNotification(`${userName} 상태 변경: ${newStatus}`);
+    await addNotification(userName + " 상태 변경: " + newStatus);
 
     loadApplications();
   }
@@ -164,12 +163,9 @@ function App() {
       status: "배정완료",
     });
 
-    await addNotification(
-      `${companionName}님이 ${item.name} 신청 수락`
-    );
+    await addNotification(companionName + "님이 " + item.name + " 신청 수락");
 
     alert("신청을 수락했습니다.");
-
     loadApplications();
   }
 
@@ -178,8 +174,7 @@ function App() {
     if (!ok) return;
 
     await deleteDoc(doc(db, "applications", id));
-
-    await addNotification(`${userName} 신청 삭제`);
+    await addNotification(userName + " 신청 삭제");
 
     loadApplications();
   }
@@ -193,9 +188,7 @@ function App() {
     item.name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const waitingApplications = applications.filter(
-    (item) => !item.companion
-  );
+  const waitingApplications = applications.filter((item) => !item.companion);
 
   const myApplications = applications.filter(
     (item) => item.companion === companionName
@@ -269,6 +262,8 @@ function App() {
                 <p><strong>이름:</strong> {item.name}</p>
                 <p><strong>전화번호:</strong> {item.phone}</p>
                 <p><strong>병원명:</strong> {item.hospital}</p>
+                <p><strong>예약 날짜:</strong> {item.date}</p>
+                <p><strong>주소:</strong> {item.address}</p>
                 <p><strong>상태:</strong> {item.status}</p>
                 <p><strong>동행자:</strong> {item.companion || "미배정"}</p>
 
@@ -285,11 +280,15 @@ function App() {
 
             <h2>실시간 알림 내역</h2>
 
-            {notifications.map((item) => (
-              <div key={item.id} style={notificationStyle}>
-                🔔 {item.message}
-              </div>
-            ))}
+            {notifications.length === 0 ? (
+              <p>아직 알림 내역이 없습니다.</p>
+            ) : (
+              notifications.map((item) => (
+                <div key={item.id} style={notificationStyle}>
+                  🔔 {item.message}
+                </div>
+              ))
+            )}
           </>
         )}
       </div>
@@ -318,78 +317,46 @@ function App() {
 
             <h2>공동배포 신청 목록</h2>
 
-            {waitingApplications.map((item) => (
-              <div key={item.id} style={cardStyle}>
-                <p><strong>신청자:</strong> {item.name}</p>
-                <p><strong>병원:</strong> {item.hospital}</p>
-                <p><strong>날짜:</strong> {item.date}</p>
+            {waitingApplications.length === 0 ? (
+              <p>현재 대기중 신청이 없습니다.</p>
+            ) : (
+              waitingApplications.map((item) => (
+                <div key={item.id} style={cardStyle}>
+                  <p><strong>신청자:</strong> {item.name}</p>
+                  <p><strong>병원:</strong> {item.hospital}</p>
+                  <p><strong>날짜:</strong> {item.date}</p>
+                  <p><strong>주소:</strong> {item.address}</p>
 
-                <button
-                  onClick={() => acceptRequest(item)}
-                  style={greenButtonStyle}
-                >
-                  내가 수락하기
-                </button>
-              </div>
-            ))}
+                  <button onClick={() => acceptRequest(item)} style={greenButtonStyle}>
+                    내가 수락하기
+                  </button>
+                </div>
+              ))
+            )}
 
             <hr />
 
             <h2>{companionName}님의 진행 목록</h2>
 
-            {myApplications.map((item) => (
-              <div key={item.id} style={cardStyle}>
-                <p><strong>신청자:</strong> {item.name}</p>
-                <p><strong>현재 상태:</strong> {item.status}</p>
+            {myApplications.length === 0 ? (
+              <p>진행중 신청이 없습니다.</p>
+            ) : (
+              myApplications.map((item) => (
+                <div key={item.id} style={cardStyle}>
+                  <p><strong>신청자:</strong> {item.name}</p>
+                  <p><strong>전화번호:</strong> {item.phone}</p>
+                  <p><strong>병원:</strong> {item.hospital}</p>
+                  <p><strong>주소:</strong> {item.address}</p>
+                  <p><strong>현재 상태:</strong> {item.status}</p>
 
-                <div style={{ marginTop: "10px" }}>
-                  <button
-                    onClick={() =>
-                      updateStatus(item.id, "출발중", item.name)
-                    }
-                    style={smallButtonStyle}
-                  >
-                    출발중
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      updateStatus(item.id, "도착완료", item.name)
-                    }
-                    style={smallButtonStyle}
-                  >
-                    도착완료
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      updateStatus(item.id, "진료중", item.name)
-                    }
-                    style={smallButtonStyle}
-                  >
-                    진료중
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      updateStatus(item.id, "귀가중", item.name)
-                    }
-                    style={smallButtonStyle}
-                  >
-                    귀가중
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      updateStatus(item.id, "서비스완료", item.name)
-                    }
-                    style={greenButtonStyle}
-                  >
-                    서비스완료
-                  </button>
+                  <button onClick={() => updateStatus(item.id, "출발중", item.name)} style={smallButtonStyle}>출발중</button>
+                  <button onClick={() => updateStatus(item.id, "도착완료", item.name)} style={smallButtonStyle}>도착완료</button>
+                  <button onClick={() => updateStatus(item.id, "진료중", item.name)} style={smallButtonStyle}>진료중</button>
+                  <button onClick={() => updateStatus(item.id, "귀가중", item.name)} style={smallButtonStyle}>귀가중</button>
+                  <button onClick={() => updateStatus(item.id, "서비스완료", item.name)} style={greenButtonStyle}>서비스완료</button>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </>
         )}
       </div>
