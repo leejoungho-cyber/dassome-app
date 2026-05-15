@@ -4,6 +4,8 @@ import "./App.css";
 function App() {
   const today = new Date().toISOString().split("T")[0];
 
+  const [submitted, setSubmitted] = useState(false);
+
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -28,7 +30,7 @@ function App() {
 
     console.log("신청내용:", form);
 
-    alert("동행 신청이 접수되었습니다.");
+    setSubmitted(true);
 
     setForm({
       name: "",
@@ -40,6 +42,32 @@ function App() {
       request: "",
     });
   };
+
+  if (submitted) {
+    return (
+      <div className="app">
+        <div className="form-box">
+          <h2>신청 완료 😊</h2>
+
+          <p
+            style={{
+              textAlign: "center",
+              lineHeight: "1.8",
+              fontSize: "18px",
+            }}
+          >
+            신청이 정상 접수되었습니다.
+            <br />
+            담당 동행자가 곧 연락드립니다.
+          </p>
+
+          <button onClick={() => setSubmitted(false)}>
+            새 신청 작성하기
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -125,9 +153,7 @@ function App() {
           onChange={handleChange}
         />
 
-        <button type="submit">
-          동행 신청하기
-        </button>
+        <button type="submit">동행 신청하기</button>
       </form>
     </div>
   );
