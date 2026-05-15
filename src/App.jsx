@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+git pushimport { useEffect, useState } from "react";
 import { db } from "./firebase";
 
 import {
@@ -22,7 +22,8 @@ function App() {
   const [isCompanion, setIsCompanion] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [companionInputs, setCompanionInputs] = useState({});
+
+  const [notifications, setNotifications] = useState([]);
 
   const [form, setForm] = useState({
     name: "",
@@ -41,6 +42,15 @@ function App() {
       ...form,
       [e.target.name]: e.target.value,
     });
+  }
+
+  async function addNotification(message) {
+    await addDoc(collection(db, "notifications"), {
+      message,
+      createdAt: new Date(),
+    });
+
+    loadNotifications();
   }
 
   function loginAdmin() {
@@ -80,9 +90,11 @@ function App() {
     await addDoc(collection(db, "applications"), {
       ...form,
       createdAt: new Date(),
-      status: "신청접수",
+      status: "대기중",
       companion: "",
     });
+
+    await addNotification(`${form.name}님 신청 접수`);
 
     alert("신청이 저장되었습니다.");
 
@@ -115,46 +127,74 @@ function App() {
     setApplications(list);
   }
 
-  async function updateStatus(id, newStatus) {
-    const ref = doc(db, "applications", id);
+  async function loadNotifications() {
+    const q = query(
+      collection(db, "notifications"),
+      orderBy("createdAt", "desc")
+    );
 
-    await updateDoc(ref, {
+    const snapshot = await getDocs(q);
+
+    const list = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    setNotifications(list);
+  }
+
+  async function updateStatus(id, newStatus, userName) {
+    await updateDoc(doc(db, "applications", id), {
       status: newStatus,
     });
 
+    await addNotification(`${userName} 상태 변경: ${newStatus}`);
+
     loadApplications();
   }
 
-  async function saveCompanion(id) {
-    const companion = companionInputs[id] || "";
+  async function acceptRequest(item) {
+    if (item.companion) {
+      alert("이미 배정된 신청입니다.");
+      return;
+    }
 
-    const ref = doc(db, "applications", id);
-
-    await updateDoc(ref, {
-      companion: companion,
-      status: "배정중",
+    await updateDoc(doc(db, "applications", item.id), {
+      companion: companionName,
+      status: "배정완료",
     });
 
-    alert("동행자가 배정되었습니다.");
+    await addNotification(
+      `${companionName}님이 ${item.name} 신청 수락`
+    );
+
+    alert("신청을 수락했습니다.");
 
     loadApplications();
   }
 
-  async function deleteApplication(id) {
+  async function deleteApplication(id, userName) {
     const ok = window.confirm("정말 삭제하시겠습니까?");
     if (!ok) return;
 
     await deleteDoc(doc(db, "applications", id));
+
+    await addNotification(`${userName} 신청 삭제`);
 
     loadApplications();
   }
 
   useEffect(() => {
     loadApplications();
+    loadNotifications();
   }, []);
 
   const filteredApplications = applications.filter((item) =>
     item.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const waitingApplications = applications.filter(
+    (item) => !item.companion
   );
 
   const myApplications = applications.filter(
@@ -162,58 +202,19 @@ function App() {
   );
 
   return (
-    <div style={{ padding: "30px", maxWidth: "950px", margin: "0 auto" }}>
+    <div style={{ padding: "30px", maxWidth: "1000px", margin: "0 auto" }}>
       <h1>다솜프로미스 동행서비스</h1>
 
       <div style={sectionStyle}>
         <h2>병원동행 신청하기</h2>
 
-        <input
-          name="name"
-          placeholder="이름"
-          value={form.name}
-          onChange={handleChange}
-          style={inputStyle}
-        />
+        <input name="name" placeholder="이름" value={form.name} onChange={handleChange} style={inputStyle} />
+        <input name="phone" placeholder="전화번호" value={form.phone} onChange={handleChange} style={inputStyle} />
+        <input name="hospital" placeholder="병원명" value={form.hospital} onChange={handleChange} style={inputStyle} />
+        <input name="date" type="date" value={form.date} onChange={handleChange} style={inputStyle} />
+        <input name="address" placeholder="주소" value={form.address} onChange={handleChange} style={inputStyle} />
 
-        <input
-          name="phone"
-          placeholder="전화번호"
-          value={form.phone}
-          onChange={handleChange}
-          style={inputStyle}
-        />
-
-        <input
-          name="hospital"
-          placeholder="병원명"
-          value={form.hospital}
-          onChange={handleChange}
-          style={inputStyle}
-        />
-
-        <input
-          name="date"
-          type="date"
-          value={form.date}
-          onChange={handleChange}
-          style={inputStyle}
-        />
-
-        <input
-          name="address"
-          placeholder="주소"
-          value={form.address}
-          onChange={handleChange}
-          style={inputStyle}
-        />
-
-        <select
-          name="car"
-          value={form.car}
-          onChange={handleChange}
-          style={inputStyle}
-        >
+        <select name="car" value={form.car} onChange={handleChange} style={inputStyle}>
           <option value="필요">차량 필요</option>
           <option value="불필요">차량 불필요</option>
         </select>
@@ -223,17 +224,10 @@ function App() {
           placeholder="요청사항"
           value={form.memo}
           onChange={handleChange}
-          style={{
-            ...inputStyle,
-            height: "100px",
-          }}
+          style={{ ...inputStyle, height: "100px" }}
         />
 
-        <button
-          type="button"
-          onClick={saveApplication}
-          style={mainButtonStyle}
-        >
+        <button type="button" onClick={saveApplication} style={mainButtonStyle}>
           신청 저장하기
         </button>
       </div>
@@ -251,25 +245,17 @@ function App() {
               style={inputStyle}
             />
 
-            <button
-              type="button"
-              onClick={loginAdmin}
-              style={adminButtonStyle}
-            >
+            <button type="button" onClick={loginAdmin} style={adminButtonStyle}>
               관리자 로그인
             </button>
           </>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={logoutAdmin}
-              style={logoutButtonStyle}
-            >
+            <button type="button" onClick={logoutAdmin} style={logoutButtonStyle}>
               관리자 로그아웃
             </button>
 
-            <h2>관리자 신청 목록</h2>
+            <h2>전체 신청 목록</h2>
 
             <input
               placeholder="이름 검색"
@@ -283,66 +269,25 @@ function App() {
                 <p><strong>이름:</strong> {item.name}</p>
                 <p><strong>전화번호:</strong> {item.phone}</p>
                 <p><strong>병원명:</strong> {item.hospital}</p>
-                <p><strong>예약 날짜:</strong> {item.date}</p>
-                <p><strong>주소:</strong> {item.address}</p>
                 <p><strong>상태:</strong> {item.status}</p>
-                <p><strong>담당 동행자:</strong> {item.companion || "미배정"}</p>
-
-                <input
-                  placeholder="동행자 이름 입력"
-                  value={companionInputs[item.id] || ""}
-                  onChange={(e) =>
-                    setCompanionInputs({
-                      ...companionInputs,
-                      [item.id]: e.target.value,
-                    })
-                  }
-                  style={inputStyle}
-                />
+                <p><strong>동행자:</strong> {item.companion || "미배정"}</p>
 
                 <button
-                  onClick={() => saveCompanion(item.id)}
-                  style={greenButtonStyle}
+                  onClick={() => deleteApplication(item.id, item.name)}
+                  style={deleteButtonStyle}
                 >
-                  동행자 배정
+                  삭제
                 </button>
+              </div>
+            ))}
 
-                <div style={{ marginTop: "10px" }}>
-                  <button
-                    onClick={() => updateStatus(item.id, "접수완료")}
-                    style={smallButtonStyle}
-                  >
-                    접수완료
-                  </button>
+            <hr />
 
-                  <button
-                    onClick={() => updateStatus(item.id, "배정중")}
-                    style={smallButtonStyle}
-                  >
-                    배정중
-                  </button>
+            <h2>실시간 알림 내역</h2>
 
-                  <button
-                    onClick={() => updateStatus(item.id, "동행중")}
-                    style={smallButtonStyle}
-                  >
-                    동행중
-                  </button>
-
-                  <button
-                    onClick={() => updateStatus(item.id, "완료")}
-                    style={smallButtonStyle}
-                  >
-                    완료
-                  </button>
-
-                  <button
-                    onClick={() => deleteApplication(item.id)}
-                    style={deleteButtonStyle}
-                  >
-                    삭제
-                  </button>
-                </div>
+            {notifications.map((item) => (
+              <div key={item.id} style={notificationStyle}>
+                🔔 {item.message}
               </div>
             ))}
           </>
@@ -361,83 +306,90 @@ function App() {
               style={inputStyle}
             />
 
-            <button
-              type="button"
-              onClick={loginCompanion}
-              style={greenButtonStyle}
-            >
+            <button type="button" onClick={loginCompanion} style={greenButtonStyle}>
               동행자 로그인
             </button>
           </>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={logoutCompanion}
-              style={logoutButtonStyle}
-            >
+            <button type="button" onClick={logoutCompanion} style={logoutButtonStyle}>
               동행자 로그아웃
             </button>
 
-            <h2>{companionName}님의 배정 목록</h2>
+            <h2>공동배포 신청 목록</h2>
 
-            {myApplications.length === 0 ? (
-              <p>배정된 신청이 없습니다.</p>
-            ) : (
-              myApplications.map((item) => (
-                <div key={item.id} style={cardStyle}>
-                  <p><strong>신청자:</strong> {item.name}</p>
-                  <p><strong>전화번호:</strong> {item.phone}</p>
-                  <p><strong>병원:</strong> {item.hospital}</p>
-                  <p><strong>날짜:</strong> {item.date}</p>
-                  <p><strong>주소:</strong> {item.address}</p>
+            {waitingApplications.map((item) => (
+              <div key={item.id} style={cardStyle}>
+                <p><strong>신청자:</strong> {item.name}</p>
+                <p><strong>병원:</strong> {item.hospital}</p>
+                <p><strong>날짜:</strong> {item.date}</p>
 
-                  <p>
-                    <strong>현재 상태:</strong>{" "}
-                    <span style={{ color: "#2563eb" }}>
-                      {item.status}
-                    </span>
-                  </p>
+                <button
+                  onClick={() => acceptRequest(item)}
+                  style={greenButtonStyle}
+                >
+                  내가 수락하기
+                </button>
+              </div>
+            ))}
 
-                  <div style={{ marginTop: "10px" }}>
-                    <button
-                      onClick={() => updateStatus(item.id, "출발중")}
-                      style={smallButtonStyle}
-                    >
-                      출발중
-                    </button>
+            <hr />
 
-                    <button
-                      onClick={() => updateStatus(item.id, "도착완료")}
-                      style={smallButtonStyle}
-                    >
-                      도착완료
-                    </button>
+            <h2>{companionName}님의 진행 목록</h2>
 
-                    <button
-                      onClick={() => updateStatus(item.id, "진료중")}
-                      style={smallButtonStyle}
-                    >
-                      진료중
-                    </button>
+            {myApplications.map((item) => (
+              <div key={item.id} style={cardStyle}>
+                <p><strong>신청자:</strong> {item.name}</p>
+                <p><strong>현재 상태:</strong> {item.status}</p>
 
-                    <button
-                      onClick={() => updateStatus(item.id, "귀가중")}
-                      style={smallButtonStyle}
-                    >
-                      귀가중
-                    </button>
+                <div style={{ marginTop: "10px" }}>
+                  <button
+                    onClick={() =>
+                      updateStatus(item.id, "출발중", item.name)
+                    }
+                    style={smallButtonStyle}
+                  >
+                    출발중
+                  </button>
 
-                    <button
-                      onClick={() => updateStatus(item.id, "서비스완료")}
-                      style={greenButtonStyle}
-                    >
-                      서비스완료
-                    </button>
-                  </div>
+                  <button
+                    onClick={() =>
+                      updateStatus(item.id, "도착완료", item.name)
+                    }
+                    style={smallButtonStyle}
+                  >
+                    도착완료
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      updateStatus(item.id, "진료중", item.name)
+                    }
+                    style={smallButtonStyle}
+                  >
+                    진료중
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      updateStatus(item.id, "귀가중", item.name)
+                    }
+                    style={smallButtonStyle}
+                  >
+                    귀가중
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      updateStatus(item.id, "서비스완료", item.name)
+                    }
+                    style={greenButtonStyle}
+                  >
+                    서비스완료
+                  </button>
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </>
         )}
       </div>
@@ -508,6 +460,13 @@ const cardStyle = {
   padding: "15px",
   marginBottom: "15px",
   backgroundColor: "#fafafa",
+};
+
+const notificationStyle = {
+  padding: "10px",
+  marginBottom: "8px",
+  backgroundColor: "#f3f4f6",
+  borderRadius: "8px",
 };
 
 export default App;
