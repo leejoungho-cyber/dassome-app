@@ -87,7 +87,7 @@ function App() {
       </h1>
 
       <form className="form-box" onSubmit={handleSubmit}>
-        <h2>병원동행 신청하기</h2>
+        <h2>동행신청하기</h2>
 
         <input
           type="text"
