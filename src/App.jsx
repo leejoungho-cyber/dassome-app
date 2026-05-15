@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { db } from "./firebase";
-import { collection, addDoc, getDocs, orderBy, query } from "firebase/firestore";
+
+import {
+  collection,
+  addDoc,
+  getDocs,
+  orderBy,
+  query,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 
 function App() {
   const [name, setName] = useState("");
@@ -33,6 +42,16 @@ function App() {
     }));
 
     setApplications(list);
+  }
+
+  async function updateStatus(id, newStatus) {
+    const ref = doc(db, "applications", id);
+
+    await updateDoc(ref, {
+      status: newStatus,
+    });
+
+    loadApplications();
   }
 
   useEffect(() => {
@@ -91,8 +110,40 @@ function App() {
                 marginBottom: "10px",
               }}
             >
-              <p><strong>이름:</strong> {item.name}</p>
-              <p><strong>상태:</strong> {item.status || "신청접수"}</p>
+              <p>
+                <strong>이름:</strong> {item.name}
+              </p>
+
+              <p>
+                <strong>상태:</strong> {item.status || "신청접수"}
+              </p>
+
+              <div style={{ marginTop: "10px" }}>
+                <button
+                  onClick={() => updateStatus(item.id, "접수완료")}
+                  style={{ marginRight: "5px" }}
+                >
+                  접수완료
+                </button>
+
+                <button
+                  onClick={() => updateStatus(item.id, "배정중")}
+                  style={{ marginRight: "5px" }}
+                >
+                  배정중
+                </button>
+
+                <button
+                  onClick={() => updateStatus(item.id, "동행중")}
+                  style={{ marginRight: "5px" }}
+                >
+                  동행중
+                </button>
+
+                <button onClick={() => updateStatus(item.id, "완료")}>
+                  완료
+                </button>
+              </div>
             </div>
           ))
         )}
