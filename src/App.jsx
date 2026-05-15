@@ -19,6 +19,8 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [search, setSearch] = useState("");
 
+  const [companionInputs, setCompanionInputs] = useState({});
+
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -62,6 +64,7 @@ function App() {
       ...form,
       createdAt: new Date(),
       status: "신청접수",
+      companion: "",
     });
 
     alert("신청이 저장되었습니다.");
@@ -80,7 +83,11 @@ function App() {
   }
 
   async function loadApplications() {
-    const q = query(collection(db, "applications"), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db, "applications"),
+      orderBy("createdAt", "desc")
+    );
+
     const snapshot = await getDocs(q);
 
     const list = snapshot.docs.map((doc) => ({
@@ -101,11 +108,26 @@ function App() {
     loadApplications();
   }
 
+  async function saveCompanion(id) {
+    const companionName = companionInputs[id] || "";
+
+    const ref = doc(db, "applications", id);
+
+    await updateDoc(ref, {
+      companion: companionName,
+    });
+
+    alert("담당 동행자가 저장되었습니다.");
+
+    loadApplications();
+  }
+
   async function deleteApplication(id) {
     const ok = window.confirm("정말 삭제하시겠습니까?");
     if (!ok) return;
 
     await deleteDoc(doc(db, "applications", id));
+
     loadApplications();
   }
 
@@ -124,13 +146,52 @@ function App() {
       <div style={sectionStyle}>
         <h2>병원동행 신청하기</h2>
 
-        <input name="name" placeholder="이름" value={form.name} onChange={handleChange} style={inputStyle} />
-        <input name="phone" placeholder="전화번호" value={form.phone} onChange={handleChange} style={inputStyle} />
-        <input name="hospital" placeholder="병원명" value={form.hospital} onChange={handleChange} style={inputStyle} />
-        <input name="date" type="date" value={form.date} onChange={handleChange} style={inputStyle} />
-        <input name="address" placeholder="주소" value={form.address} onChange={handleChange} style={inputStyle} />
+        <input
+          name="name"
+          placeholder="이름"
+          value={form.name}
+          onChange={handleChange}
+          style={inputStyle}
+        />
 
-        <select name="car" value={form.car} onChange={handleChange} style={inputStyle}>
+        <input
+          name="phone"
+          placeholder="전화번호"
+          value={form.phone}
+          onChange={handleChange}
+          style={inputStyle}
+        />
+
+        <input
+          name="hospital"
+          placeholder="병원명"
+          value={form.hospital}
+          onChange={handleChange}
+          style={inputStyle}
+        />
+
+        <input
+          name="date"
+          type="date"
+          value={form.date}
+          onChange={handleChange}
+          style={inputStyle}
+        />
+
+        <input
+          name="address"
+          placeholder="주소"
+          value={form.address}
+          onChange={handleChange}
+          style={inputStyle}
+        />
+
+        <select
+          name="car"
+          value={form.car}
+          onChange={handleChange}
+          style={inputStyle}
+        >
           <option value="필요">차량 필요</option>
           <option value="불필요">차량 불필요</option>
         </select>
@@ -140,10 +201,17 @@ function App() {
           placeholder="요청사항"
           value={form.memo}
           onChange={handleChange}
-          style={{ ...inputStyle, height: "100px" }}
+          style={{
+            ...inputStyle,
+            height: "100px",
+          }}
         />
 
-        <button type="button" onClick={saveApplication} style={mainButtonStyle}>
+        <button
+          type="button"
+          onClick={saveApplication}
+          style={mainButtonStyle}
+        >
           신청 저장하기
         </button>
       </div>
@@ -161,13 +229,21 @@ function App() {
               style={inputStyle}
             />
 
-            <button type="button" onClick={loginAdmin} style={adminButtonStyle}>
+            <button
+              type="button"
+              onClick={loginAdmin}
+              style={adminButtonStyle}
+            >
               관리자 로그인
             </button>
           </>
         ) : (
           <>
-            <button type="button" onClick={logoutAdmin} style={logoutButtonStyle}>
+            <button
+              type="button"
+              onClick={logoutAdmin}
+              style={logoutButtonStyle}
+            >
               관리자 로그아웃
             </button>
 
@@ -200,15 +276,70 @@ function App() {
                     </span>
                   </p>
 
+                  <p>
+                    <strong>담당 동행자:</strong>{" "}
+                    {item.companion || "미배정"}
+                  </p>
+
+                  <input
+                    placeholder="동행자 이름 입력"
+                    value={companionInputs[item.id] || ""}
+                    onChange={(e) =>
+                      setCompanionInputs({
+                        ...companionInputs,
+                        [item.id]: e.target.value,
+                      })
+                    }
+                    style={inputStyle}
+                  />
+
+                  <button
+                    onClick={() => saveCompanion(item.id)}
+                    style={{
+                      ...smallButtonStyle,
+                      backgroundColor: "#10b981",
+                      color: "white",
+                    }}
+                  >
+                    담당자 저장
+                  </button>
+
                   <div style={{ marginTop: "10px" }}>
-                    <button onClick={() => updateStatus(item.id, "접수완료")} style={smallButtonStyle}>접수완료</button>
-                    <button onClick={() => updateStatus(item.id, "배정중")} style={smallButtonStyle}>배정중</button>
-                    <button onClick={() => updateStatus(item.id, "동행중")} style={smallButtonStyle}>동행중</button>
-                    <button onClick={() => updateStatus(item.id, "완료")} style={smallButtonStyle}>완료</button>
+                    <button
+                      onClick={() => updateStatus(item.id, "접수완료")}
+                      style={smallButtonStyle}
+                    >
+                      접수완료
+                    </button>
+
+                    <button
+                      onClick={() => updateStatus(item.id, "배정중")}
+                      style={smallButtonStyle}
+                    >
+                      배정중
+                    </button>
+
+                    <button
+                      onClick={() => updateStatus(item.id, "동행중")}
+                      style={smallButtonStyle}
+                    >
+                      동행중
+                    </button>
+
+                    <button
+                      onClick={() => updateStatus(item.id, "완료")}
+                      style={smallButtonStyle}
+                    >
+                      완료
+                    </button>
 
                     <button
                       onClick={() => deleteApplication(item.id)}
-                      style={{ ...smallButtonStyle, backgroundColor: "red", color: "white" }}
+                      style={{
+                        ...smallButtonStyle,
+                        backgroundColor: "red",
+                        color: "white",
+                      }}
                     >
                       삭제
                     </button>
