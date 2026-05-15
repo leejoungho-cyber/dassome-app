@@ -17,8 +17,11 @@ function App() {
 
   const [adminPassword, setAdminPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [search, setSearch] = useState("");
 
+  const [companionName, setCompanionName] = useState("");
+  const [isCompanion, setIsCompanion] = useState(false);
+
+  const [search, setSearch] = useState("");
   const [companionInputs, setCompanionInputs] = useState({});
 
   const [form, setForm] = useState({
@@ -52,6 +55,20 @@ function App() {
   function logoutAdmin() {
     setIsAdmin(false);
     setAdminPassword("");
+  }
+
+  function loginCompanion() {
+    if (!companionName) {
+      alert("동행자 이름을 입력해주세요.");
+      return;
+    }
+
+    setIsCompanion(true);
+  }
+
+  function logoutCompanion() {
+    setIsCompanion(false);
+    setCompanionName("");
   }
 
   async function saveApplication() {
@@ -109,15 +126,16 @@ function App() {
   }
 
   async function saveCompanion(id) {
-    const companionName = companionInputs[id] || "";
+    const companion = companionInputs[id] || "";
 
     const ref = doc(db, "applications", id);
 
     await updateDoc(ref, {
-      companion: companionName,
+      companion: companion,
+      status: "배정중",
     });
 
-    alert("담당 동행자가 저장되었습니다.");
+    alert("동행자가 배정되었습니다.");
 
     loadApplications();
   }
@@ -139,8 +157,12 @@ function App() {
     item.name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const myApplications = applications.filter(
+    (item) => item.companion === companionName
+  );
+
   return (
-    <div style={{ padding: "30px", maxWidth: "900px", margin: "0 auto" }}>
+    <div style={{ padding: "30px", maxWidth: "950px", margin: "0 auto" }}>
       <h1>다솜프로미스 동행서비스</h1>
 
       <div style={sectionStyle}>
@@ -256,92 +278,161 @@ function App() {
               style={inputStyle}
             />
 
-            {filteredApplications.length === 0 ? (
-              <p>신청 내역이 없습니다.</p>
+            {filteredApplications.map((item) => (
+              <div key={item.id} style={cardStyle}>
+                <p><strong>이름:</strong> {item.name}</p>
+                <p><strong>전화번호:</strong> {item.phone}</p>
+                <p><strong>병원명:</strong> {item.hospital}</p>
+                <p><strong>예약 날짜:</strong> {item.date}</p>
+                <p><strong>주소:</strong> {item.address}</p>
+                <p><strong>상태:</strong> {item.status}</p>
+                <p><strong>담당 동행자:</strong> {item.companion || "미배정"}</p>
+
+                <input
+                  placeholder="동행자 이름 입력"
+                  value={companionInputs[item.id] || ""}
+                  onChange={(e) =>
+                    setCompanionInputs({
+                      ...companionInputs,
+                      [item.id]: e.target.value,
+                    })
+                  }
+                  style={inputStyle}
+                />
+
+                <button
+                  onClick={() => saveCompanion(item.id)}
+                  style={greenButtonStyle}
+                >
+                  동행자 배정
+                </button>
+
+                <div style={{ marginTop: "10px" }}>
+                  <button
+                    onClick={() => updateStatus(item.id, "접수완료")}
+                    style={smallButtonStyle}
+                  >
+                    접수완료
+                  </button>
+
+                  <button
+                    onClick={() => updateStatus(item.id, "배정중")}
+                    style={smallButtonStyle}
+                  >
+                    배정중
+                  </button>
+
+                  <button
+                    onClick={() => updateStatus(item.id, "동행중")}
+                    style={smallButtonStyle}
+                  >
+                    동행중
+                  </button>
+
+                  <button
+                    onClick={() => updateStatus(item.id, "완료")}
+                    style={smallButtonStyle}
+                  >
+                    완료
+                  </button>
+
+                  <button
+                    onClick={() => deleteApplication(item.id)}
+                    style={deleteButtonStyle}
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      <div style={sectionStyle}>
+        <h2>동행자 로그인</h2>
+
+        {!isCompanion ? (
+          <>
+            <input
+              placeholder="동행자 이름"
+              value={companionName}
+              onChange={(e) => setCompanionName(e.target.value)}
+              style={inputStyle}
+            />
+
+            <button
+              type="button"
+              onClick={loginCompanion}
+              style={greenButtonStyle}
+            >
+              동행자 로그인
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={logoutCompanion}
+              style={logoutButtonStyle}
+            >
+              동행자 로그아웃
+            </button>
+
+            <h2>{companionName}님의 배정 목록</h2>
+
+            {myApplications.length === 0 ? (
+              <p>배정된 신청이 없습니다.</p>
             ) : (
-              filteredApplications.map((item) => (
+              myApplications.map((item) => (
                 <div key={item.id} style={cardStyle}>
-                  <p><strong>이름:</strong> {item.name}</p>
+                  <p><strong>신청자:</strong> {item.name}</p>
                   <p><strong>전화번호:</strong> {item.phone}</p>
-                  <p><strong>병원명:</strong> {item.hospital}</p>
-                  <p><strong>예약 날짜:</strong> {item.date}</p>
+                  <p><strong>병원:</strong> {item.hospital}</p>
+                  <p><strong>날짜:</strong> {item.date}</p>
                   <p><strong>주소:</strong> {item.address}</p>
-                  <p><strong>차량 여부:</strong> {item.car}</p>
-                  <p><strong>요청사항:</strong> {item.memo}</p>
 
                   <p>
-                    <strong>상태:</strong>{" "}
-                    <span style={{ color: "#2563eb", fontWeight: "bold" }}>
-                      {item.status || "신청접수"}
+                    <strong>현재 상태:</strong>{" "}
+                    <span style={{ color: "#2563eb" }}>
+                      {item.status}
                     </span>
                   </p>
 
-                  <p>
-                    <strong>담당 동행자:</strong>{" "}
-                    {item.companion || "미배정"}
-                  </p>
-
-                  <input
-                    placeholder="동행자 이름 입력"
-                    value={companionInputs[item.id] || ""}
-                    onChange={(e) =>
-                      setCompanionInputs({
-                        ...companionInputs,
-                        [item.id]: e.target.value,
-                      })
-                    }
-                    style={inputStyle}
-                  />
-
-                  <button
-                    onClick={() => saveCompanion(item.id)}
-                    style={{
-                      ...smallButtonStyle,
-                      backgroundColor: "#10b981",
-                      color: "white",
-                    }}
-                  >
-                    담당자 저장
-                  </button>
-
                   <div style={{ marginTop: "10px" }}>
                     <button
-                      onClick={() => updateStatus(item.id, "접수완료")}
+                      onClick={() => updateStatus(item.id, "출발중")}
                       style={smallButtonStyle}
                     >
-                      접수완료
+                      출발중
                     </button>
 
                     <button
-                      onClick={() => updateStatus(item.id, "배정중")}
+                      onClick={() => updateStatus(item.id, "도착완료")}
                       style={smallButtonStyle}
                     >
-                      배정중
+                      도착완료
                     </button>
 
                     <button
-                      onClick={() => updateStatus(item.id, "동행중")}
+                      onClick={() => updateStatus(item.id, "진료중")}
                       style={smallButtonStyle}
                     >
-                      동행중
+                      진료중
                     </button>
 
                     <button
-                      onClick={() => updateStatus(item.id, "완료")}
+                      onClick={() => updateStatus(item.id, "귀가중")}
                       style={smallButtonStyle}
                     >
-                      완료
+                      귀가중
                     </button>
 
                     <button
-                      onClick={() => deleteApplication(item.id)}
-                      style={{
-                        ...smallButtonStyle,
-                        backgroundColor: "red",
-                        color: "white",
-                      }}
+                      onClick={() => updateStatus(item.id, "서비스완료")}
+                      style={greenButtonStyle}
                     >
-                      삭제
+                      서비스완료
                     </button>
                   </div>
                 </div>
@@ -379,7 +470,6 @@ const mainButtonStyle = {
   borderRadius: "8px",
   cursor: "pointer",
   width: "100%",
-  fontSize: "16px",
 };
 
 const adminButtonStyle = {
@@ -390,7 +480,11 @@ const adminButtonStyle = {
 const logoutButtonStyle = {
   ...mainButtonStyle,
   backgroundColor: "#6b7280",
-  marginBottom: "20px",
+};
+
+const greenButtonStyle = {
+  ...mainButtonStyle,
+  backgroundColor: "#10b981",
 };
 
 const smallButtonStyle = {
@@ -400,6 +494,12 @@ const smallButtonStyle = {
   borderRadius: "6px",
   border: "none",
   cursor: "pointer",
+};
+
+const deleteButtonStyle = {
+  ...smallButtonStyle,
+  backgroundColor: "red",
+  color: "white",
 };
 
 const cardStyle = {
