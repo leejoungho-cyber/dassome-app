@@ -107,22 +107,26 @@ function App() {
         />
 
         <label className="label">예약일자 선택</label>
-        <input
-          type="date"
-          name="reservationDate"
-          value={form.reservationDate}
-          onChange={handleChange}
-          min={today}
-          required
-        />
+        <label className="label">예약일자 선택</label>
 
-        <label className="label">예약시간 선택</label>
-        <input
-          type="time"
-          name="reservationTime"
-          value={form.reservationTime}
-          onChange={handleChange}
-          required
+<input
+  type="date"
+  name="reservationDate"
+  value={form.reservationDate}
+  onChange={handleChange}
+  min={today}
+  required
+/>
+
+<label className="label">예약시간 선택</label>
+
+<input
+  type="time"
+  name="reservationTime"
+  value={form.reservationTime}
+  onChange={handleChange}
+  required
+/>
         />
 
         <input
