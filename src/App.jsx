@@ -1,4 +1,4 @@
-git add .; git commit -m "fix text"; git pushimport { useState } from "react";
+import { useState } from "react";
 import "./App.css";
 
 function App() {
@@ -19,6 +19,7 @@ function App() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+
     setForm({
       ...form,
       [name]: value,
@@ -49,12 +50,22 @@ function App() {
       <div className="app">
         <div className="form-box">
           <h2>신청 완료 😊</h2>
-          <p style={{ textAlign: "center", lineHeight: "1.8", fontSize: "18px" }}>
+
+          <p
+            style={{
+              textAlign: "center",
+              lineHeight: "1.8",
+              fontSize: "18px",
+            }}
+          >
             신청이 정상 접수되었습니다.
             <br />
             담당 동행자가 곧 연락드립니다.
           </p>
-          <button onClick={() => setSubmitted(false)}>새 신청 작성하기</button>
+
+          <button onClick={() => setSubmitted(false)}>
+            새 신청 작성하기
+          </button>
         </div>
       </div>
     );
@@ -107,25 +118,24 @@ function App() {
         />
 
         <label className="label">예약일자 선택</label>
-       
-<input
-  type="date"
-  name="reservationDate"
-  value={form.reservationDate}
-  onChange={handleChange}
-  min={today}
-  required
-/>
 
-<label className="label">예약시간 선택</label>
+        <input
+          type="date"
+          name="reservationDate"
+          value={form.reservationDate}
+          onChange={handleChange}
+          min={today}
+          required
+        />
 
-<input
-  type="time"
-  name="reservationTime"
-  value={form.reservationTime}
-  onChange={handleChange}
-  required
-/>
+        <label className="label">예약시간 선택</label>
+
+        <input
+          type="time"
+          name="reservationTime"
+          value={form.reservationTime}
+          onChange={handleChange}
+          required
         />
 
         <input
@@ -155,7 +165,9 @@ function App() {
           onChange={handleChange}
         />
 
-        <button type="submit">동행 신청하기</button>
+        <button type="submit">
+          동행 신청하기
+        </button>
       </form>
     </div>
   );
