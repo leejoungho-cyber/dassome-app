@@ -22,6 +22,9 @@ function App() {
   const [companionName, setCompanionName] = useState("");
   const [isCompanion, setIsCompanion] = useState(false);
 
+  const [guardianCode, setGuardianCode] = useState("");
+  const [guardianItem, setGuardianItem] = useState(null);
+
   const [search, setSearch] = useState("");
   const [notifications, setNotifications] = useState([]);
 
@@ -39,6 +42,10 @@ function App() {
 
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
+  }
+
+  function makeCode() {
+    return "DS" + Date.now().toString().slice(-6);
   }
 
   async function addNotification(message) {
@@ -82,8 +89,11 @@ function App() {
       return;
     }
 
+    const code = makeCode();
+
     await addDoc(collection(db, "applications"), {
       ...form,
+      guardianCode: code,
       createdAt: new Date(),
       status: "대기중",
       companion: "",
@@ -91,9 +101,9 @@ function App() {
       longitude: "",
     });
 
-    await addNotification(form.name + "님 신청 접수");
+    await addNotification(form.name + "님 신청 접수 / 보호자코드: " + code);
 
-    alert("신청이 저장되었습니다.");
+    alert("신청이 저장되었습니다.\n보호자 확인 코드: " + code);
 
     setForm({
       name: "",
@@ -191,6 +201,18 @@ function App() {
     loadApplications();
   }
 
+  function findGuardianItem() {
+    const found = applications.find((item) => item.guardianCode === guardianCode);
+
+    if (!found) {
+      alert("해당 보호자 코드를 찾을 수 없습니다.");
+      setGuardianItem(null);
+      return;
+    }
+
+    setGuardianItem(found);
+  }
+
   useEffect(() => {
     loadApplications();
     loadNotifications();
@@ -246,6 +268,45 @@ function App() {
       </div>
 
       <div style={sectionStyle}>
+        <h2>👨‍👩‍👧 보호자 진행 확인</h2>
+
+        <input
+          placeholder="보호자 확인 코드 입력 예: DS123456"
+          value={guardianCode}
+          onChange={(e) => setGuardianCode(e.target.value)}
+          style={inputStyle}
+        />
+
+        <button type="button" onClick={findGuardianItem} style={greenButtonStyle}>
+          진행상황 확인하기
+        </button>
+
+        {guardianItem && (
+          <div style={cardStyle}>
+            <h3>{guardianItem.name}님 병원동행 진행상황</h3>
+            <p><strong>병원:</strong> {guardianItem.hospital}</p>
+            <p><strong>예약 날짜:</strong> {guardianItem.date}</p>
+            <p><strong>현재 상태:</strong> {guardianItem.status}</p>
+            <p><strong>담당 동행자:</strong> {guardianItem.companion || "아직 배정 전"}</p>
+
+            {guardianItem.latitude && guardianItem.longitude ? (
+              <p>
+                <a
+                  href={`https://www.google.com/maps?q=${guardianItem.latitude},${guardianItem.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  현재 위치 지도에서 보기
+                </a>
+              </p>
+            ) : (
+              <p>현재 위치는 아직 저장되지 않았습니다.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div style={sectionStyle}>
         <h2>관리자 로그인</h2>
 
         {!isAdmin ? (
@@ -297,6 +358,7 @@ function App() {
                     <p><strong>주소:</strong> {item.address}</p>
                     <p><strong>상태:</strong> {item.status}</p>
                     <p><strong>동행자:</strong> {item.companion || "미배정"}</p>
+                    <p><strong>보호자 코드:</strong> {item.guardianCode || "없음"}</p>
 
                     <button onClick={() => deleteApplication(item.id, item.name)} style={deleteButtonStyle}>
                       삭제
@@ -332,10 +394,7 @@ function App() {
                   companions.map((name) => (
                     <div key={name} style={cardStyle}>
                       <p><strong>동행자:</strong> {name}</p>
-                      <p>
-                        <strong>배정 건수:</strong>{" "}
-                        {applications.filter((item) => item.companion === name).length}건
-                      </p>
+                      <p><strong>배정 건수:</strong> {applications.filter((item) => item.companion === name).length}건</p>
                     </div>
                   ))
                 )}
@@ -452,6 +511,7 @@ function App() {
                   <p><strong>병원:</strong> {item.hospital}</p>
                   <p><strong>주소:</strong> {item.address}</p>
                   <p><strong>현재 상태:</strong> {item.status}</p>
+                  <p><strong>보호자 코드:</strong> {item.guardianCode || "없음"}</p>
 
                   <button onClick={() => saveMyLocation(item.id)} style={greenButtonStyle}>
                     내 위치 저장하기
