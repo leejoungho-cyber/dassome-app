@@ -1,33 +1,14 @@
 import { useEffect, useState } from "react";
-import {
-  collection,
-  addDoc,
-  onSnapshot,
-  deleteDoc,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
-import { db } from "./firebase";
-import * as XLSX from "xlsx";
-
-const ADMIN_ID = "admin";
-const ADMIN_PW = "1234";
-const WORKER_ID = "worker";
-const WORKER_PW = "1234";
-
-const BANK_INFO = {
-  bank: "농협",
-  account: "123-4567-8901-23",
-  owner: "다솜프로미스",
-};
 
 export default function App() {
-  const [userType, setUserType] = useState("");
-  const [activeMenu, setActiveMenu] = useState("신청관리");
+  const [isLogin, setIsLogin] = useState(false);
   const [loginForm, setLoginForm] = useState({ id: "", pw: "" });
+  const [activeMenu, setActiveMenu] = useState("신청관리");
+
   const [requests, setRequests] = useState([]);
+  const [companions, setCompanions] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [currentLocation, setCurrentLocation] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -35,140 +16,72 @@ export default function App() {
     hospital: "",
     date: "",
     time: "",
-    status: "대기중",
-    payment: "미결제",
-    worker: "",
   });
 
   useEffect(() => {
-    const savedType = localStorage.getItem("dasom_user_type");
-    if (savedType) setUserType(savedType);
+    setRequests(JSON.parse(localStorage.getItem("requests") || "[]"));
+    setCompanions(JSON.parse(localStorage.getItem("companions") || "[]"));
+    setNotifications(JSON.parse(localStorage.getItem("notifications") || "[]"));
   }, []);
 
-  useEffect(() => {
-    if (!userType) return;
+  const saveLocal = (key, data) => {
+    localStorage.setItem(key, JSON.stringify(data));
+  };
 
-    const savedNotifications = localStorage.getItem("dasom_notifications");
-    if (savedNotifications) {
-      const list = JSON.parse(savedNotifications);
-      setNotifications(list);
-      setUnreadCount(list.filter((n) => !n.read).length);
+  const handleLogin = () => {
+    if (loginForm.id === "admin" && loginForm.pw === "1234") {
+      setIsLogin(true);
+    } else {
+      alert("아이디 또는 비밀번호가 다릅니다.");
     }
+  };
 
-    const unsub = onSnapshot(collection(db, "requests"), (snapshot) => {
-      const list = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      setRequests(list);
-    });
+  const handleLogout = () => {
+    setIsLogin(false);
+  };
 
-    return () => unsub();
-  }, [userType]);
-
-  const addNotification = (message) => {
+  const addNotification = (text) => {
     const newNoti = {
       id: Date.now(),
-      message,
+      text,
       read: false,
       time: new Date().toLocaleString(),
     };
 
-    const newList = [newNoti, ...notifications].slice(0, 50);
-    setNotifications(newList);
-    setUnreadCount(newList.filter((n) => !n.read).length);
-    localStorage.setItem("dasom_notifications", JSON.stringify(newList));
+    const updated = [newNoti, ...notifications];
+    setNotifications(updated);
+    saveLocal("notifications", updated);
   };
 
   const markAllRead = () => {
-    const newList = notifications.map((n) => ({ ...n, read: true }));
-    setNotifications(newList);
-    setUnreadCount(0);
-    localStorage.setItem("dasom_notifications", JSON.stringify(newList));
-  };
-
-  const clearNotifications = () => {
-    if (!window.confirm("알림을 모두 삭제하시겠습니까?")) return;
-    setNotifications([]);
-    setUnreadCount(0);
-    localStorage.removeItem("dasom_notifications");
-  };
-
-  const downloadExcel = (type) => {
-    const isSettlement = type === "settlement";
-    const targetList = isSettlement
-      ? requests.filter((r) => r.status === "완료")
-      : requests;
-
-    if (targetList.length === 0) {
-      alert("다운로드할 내역이 없습니다.");
-      return;
-    }
-
-    const excelData = targetList.map((item, index) => ({
-      번호: index + 1,
-      신청자: item.name || "",
-      연락처: item.phone || "",
-      병원명: item.hospital || "",
-      날짜: item.date || "",
-      시간: item.time || "",
-      상태: item.status || "",
-      결제상태: item.payment || "",
-      동행자: item.worker || "미지정",
+    const updated = notifications.map((n) => ({
+      ...n,
+      read: true,
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    const workbook = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      isSettlement ? "정산내역" : "신청내역"
-    );
-
-    XLSX.writeFile(
-      workbook,
-      isSettlement
-        ? "다솜프로미스_정산내역.xlsx"
-        : "다솜프로미스_신청내역.xlsx"
-    );
+    setNotifications(updated);
+    saveLocal("notifications", updated);
   };
 
-  const handleLogin = () => {
-    if (loginForm.id === ADMIN_ID && loginForm.pw === ADMIN_PW) {
-      localStorage.setItem("dasom_user_type", "admin");
-      setUserType("admin");
-      return;
-    }
-
-    if (loginForm.id === WORKER_ID && loginForm.pw === WORKER_PW) {
-      localStorage.setItem("dasom_user_type", "worker");
-      setUserType("worker");
-      return;
-    }
-
-    alert("아이디 또는 비밀번호가 틀렸습니다.");
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("dasom_user_type");
-    setUserType("");
-    setLoginForm({ id: "", pw: "" });
-  };
-
-  const handleSubmit = async () => {
+  const saveRequest = () => {
     if (!form.name || !form.phone) {
-      alert("이름과 연락처를 입력하세요.");
+      alert("신청자 이름과 연락처를 입력하세요.");
       return;
     }
 
-    await addDoc(collection(db, "requests"), {
+    const newRequest = {
+      id: Date.now(),
       ...form,
-      createdAt: new Date(),
-    });
+      status: "대기중",
+      payment: "미결제",
+      createdAt: new Date().toLocaleString(),
+    };
 
-    addNotification(`🆕 신규 신청: ${form.name}님 / ${form.hospital}`);
-    alert("저장 완료");
+    const updated = [newRequest, ...requests];
+    setRequests(updated);
+    saveLocal("requests", updated);
+
+    addNotification(`${form.name}님의 신청이 등록되었습니다.`);
 
     setForm({
       name: "",
@@ -176,118 +89,187 @@ export default function App() {
       hospital: "",
       date: "",
       time: "",
-      status: "대기중",
-      payment: "미결제",
-      worker: "",
     });
   };
 
-  const updateField = async (id, field, value) => {
-    const target = requests.find((r) => r.id === id);
+  const updateRequest = (id, field, value) => {
+    const updated = requests.map((r) =>
+      r.id === id ? { ...r, [field]: value } : r
+    );
 
-    await updateDoc(doc(db, "requests", id), {
-      [field]: value,
-    });
-
-    if (field === "status") {
-      addNotification(`🚦 상태 변경: ${target?.name || "신청"}님 → ${value}`);
-    }
-
-    if (field === "payment") {
-      addNotification(`💳 결제 변경: ${target?.name || "신청"}님 → ${value}`);
-    }
-
-    if (field === "worker") {
-      addNotification(
-        `👤 동행자 배정: ${target?.name || "신청"}님 → ${
-          value || "미지정"
-        }`
-      );
-    }
+    setRequests(updated);
+    saveLocal("requests", updated);
   };
 
-  const handleAcceptRequest = async (item) => {
-    await updateDoc(doc(db, "requests", item.id), {
-      worker: "worker",
-      status: "배정완료",
-    });
+  const deleteRequest = (id) => {
+    if (!confirm("삭제하시겠습니까?")) return;
 
-    addNotification(`✅ 동행자 수락: ${item.name}님 신청`);
+    const updated = requests.filter((r) => r.id !== id);
+    setRequests(updated);
+    saveLocal("requests", updated);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("삭제하시겠습니까?")) return;
+  const addCompanion = () => {
+    const name = prompt("동행자 이름을 입력하세요.");
 
-    const target = requests.find((r) => r.id === id);
-    await deleteDoc(doc(db, "requests", id));
-    addNotification(`🗑 신청 삭제: ${target?.name || "신청"}님`);
+    if (!name) return;
+
+    const newCompanion = {
+      id: Date.now(),
+      name,
+      status: "대기",
+      memo: "",
+    };
+
+    const updated = [...companions, newCompanion];
+    setCompanions(updated);
+    saveLocal("companions", updated);
   };
 
-  if (!userType) {
+  const deleteCompanion = (id) => {
+    const updated = companions.filter((c) => c.id !== id);
+    setCompanions(updated);
+    saveLocal("companions", updated);
+  };
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("이 기기는 위치공유를 지원하지 않습니다.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        const locationText = `위도: ${lat}, 경도: ${lng}`;
+
+        setCurrentLocation(locationText);
+        addNotification(`현재 위치 확인 완료: ${locationText}`);
+        alert("현재 위치를 가져왔습니다.");
+      },
+      () => {
+        alert("위치 정보를 가져오지 못했습니다.");
+      }
+    );
+  };
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const pageStyle = {
+    minHeight: "100vh",
+    background: "#f3f4f6",
+    padding: "20px",
+    fontFamily: "Arial, sans-serif",
+  };
+
+  const topStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "15px",
+  };
+
+  const titleStyle = {
+    fontSize: "28px",
+    margin: 0,
+  };
+
+  const logoutStyle = {
+    background: "#111827",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px 16px",
+    cursor: "pointer",
+  };
+
+  const menuStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: "10px",
+    marginBottom: "20px",
+  };
+
+  const menuButtonStyle = {
+    border: "1px solid #ddd",
+    borderRadius: "10px",
+    padding: "14px",
+    fontSize: "16px",
+    cursor: "pointer",
+  };
+
+  const cardStyle = {
+    background: "white",
+    borderRadius: "14px",
+    padding: "20px",
+    marginBottom: "20px",
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "14px",
+    marginBottom: "12px",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    fontSize: "16px",
+    boxSizing: "border-box",
+  };
+
+  const blueButtonStyle = {
+    width: "100%",
+    background: "#2563eb",
+    color: "white",
+    border: "none",
+    padding: "14px",
+    borderRadius: "8px",
+    fontSize: "16px",
+    cursor: "pointer",
+  };
+
+  const smallButtonStyle = {
+    padding: "8px 12px",
+    marginTop: "8px",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+  };
+
+  if (!isLogin) {
     return (
       <div style={pageStyle}>
-        <div style={loginBoxStyle}>
-          <h1 style={titleStyle}>🔐 로그인</h1>
-          <p>다솜프로미스 동행서비스</p>
+        <div style={cardStyle}>
+          <h1 style={{ textAlign: "center" }}>🚗 다솜프로미스 관리자</h1>
+          <p style={{ textAlign: "center" }}>다솜프로미스 동행서비스</p>
 
           <input
+            style={inputStyle}
             placeholder="아이디"
             value={loginForm.id}
             onChange={(e) =>
               setLoginForm({ ...loginForm, id: e.target.value })
             }
-            style={inputStyle}
           />
 
           <input
+            style={inputStyle}
             type="password"
             placeholder="비밀번호"
             value={loginForm.pw}
             onChange={(e) =>
               setLoginForm({ ...loginForm, pw: e.target.value })
             }
-            style={inputStyle}
           />
 
-          <button onClick={handleLogin} style={buttonStyle}>
+          <button style={blueButtonStyle} onClick={handleLogin}>
             로그인
           </button>
 
-          <p style={{ fontSize: 13, color: "#777" }}>
-            관리자: admin / 1234
-            <br />
-            동행자: worker / 1234
+          <p style={{ textAlign: "center", color: "#666" }}>
+            기본 아이디: admin / 비밀번호: 1234
           </p>
         </div>
-      </div>
-    );
-  }
-
-  if (userType === "worker") {
-    return (
-      <div style={pageStyle}>
-        <div style={topStyle}>
-          <h1 style={titleStyle}>👤 동행자 화면</h1>
-          <button onClick={handleLogout} style={logoutStyle}>
-            로그아웃
-          </button>
-        </div>
-
-        <div style={noticeBoxStyle}>
-          🔔 알림 {unreadCount > 0 && <b>({unreadCount})</b>}
-        </div>
-
-        <WorkerRequestList
-          requests={requests}
-          updateField={updateField}
-          handleAcceptRequest={handleAcceptRequest}
-        />
-
-        <NotificationCenter
-          notifications={notifications}
-          markAllRead={markAllRead}
-          clearNotifications={clearNotifications}
-        />
       </div>
     );
   }
@@ -302,7 +284,7 @@ export default function App() {
       </div>
 
       <div style={menuStyle}>
-        {["신청관리", "동행자관리", "정산관리", "알림센터", "설정"].map(
+        {["신청관리", "동행자관리", "정산관리", "알림센터", "설정", "위치공유"].map(
           (menu) => (
             <button
               key={menu}
@@ -313,12 +295,12 @@ export default function App() {
               style={{
                 ...menuButtonStyle,
                 background: activeMenu === menu ? "#2563eb" : "white",
-                color: activeMenu === menu ? "white" : "#111",
+                color: activeMenu === menu ? "white" : "black",
               }}
             >
               {menu}
               {menu === "알림센터" && unreadCount > 0
-                ? ` 🔴${unreadCount}`
+                ? ` (${unreadCount})`
                 : ""}
             </button>
           )
@@ -330,529 +312,248 @@ export default function App() {
           <div style={cardStyle}>
             <h2>📋 신청 등록</h2>
 
-            <BankGuide />
-
             <input
+              style={inputStyle}
               placeholder="신청자 이름"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              style={inputStyle}
             />
 
             <input
+              style={inputStyle}
               placeholder="연락처"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              style={inputStyle}
             />
 
             <input
+              style={inputStyle}
               placeholder="병원명"
               value={form.hospital}
-              onChange={(e) =>
-                setForm({ ...form, hospital: e.target.value })
-              }
-              style={inputStyle}
+              onChange={(e) => setForm({ ...form, hospital: e.target.value })}
             />
 
             <input
+              style={inputStyle}
               type="date"
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
-              style={inputStyle}
             />
 
             <input
+              style={inputStyle}
               type="time"
               value={form.time}
               onChange={(e) => setForm({ ...form, time: e.target.value })}
-              style={inputStyle}
             />
 
-            <button onClick={handleSubmit} style={buttonStyle}>
+            <button style={blueButtonStyle} onClick={saveRequest}>
               저장하기
             </button>
           </div>
 
           <div style={cardStyle}>
-            <h2>📄 엑셀 다운로드</h2>
-            <button onClick={() => downloadExcel("all")} style={buttonStyle}>
-              전체 신청 엑셀 다운로드
-            </button>
-          </div>
+            <h2>📦 신청 목록</h2>
 
-          <RequestList
-            requests={requests}
-            updateField={updateField}
-            handleDelete={handleDelete}
-          />
+            {requests.length === 0 ? (
+              <p>등록된 신청이 없습니다.</p>
+            ) : (
+              requests.map((r) => (
+                <div
+                  key={r.id}
+                  style={{
+                    border: "1px solid #ddd",
+                    borderRadius: "10px",
+                    padding: "15px",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <p>신청자: {r.name}</p>
+                  <p>연락처: {r.phone}</p>
+                  <p>병원: {r.hospital}</p>
+                  <p>날짜: {r.date}</p>
+                  <p>시간: {r.time}</p>
+
+                  <p>상태</p>
+                  <select
+                    style={inputStyle}
+                    value={r.status}
+                    onChange={(e) =>
+                      updateRequest(r.id, "status", e.target.value)
+                    }
+                  >
+                    <option>대기중</option>
+                    <option>배정완료</option>
+                    <option>진행중</option>
+                    <option>완료</option>
+                    <option>취소</option>
+                  </select>
+
+                  <p>결제</p>
+                  <select
+                    style={inputStyle}
+                    value={r.payment}
+                    onChange={(e) =>
+                      updateRequest(r.id, "payment", e.target.value)
+                    }
+                  >
+                    <option>미결제</option>
+                    <option>입금대기</option>
+                    <option>결제완료</option>
+                    <option>환불</option>
+                  </select>
+
+                  <button
+                    style={{
+                      ...smallButtonStyle,
+                      background: "#ef4444",
+                      color: "white",
+                    }}
+                    onClick={() => deleteRequest(r.id)}
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </>
       )}
 
       {activeMenu === "동행자관리" && (
         <div style={cardStyle}>
-          <h2>👥 동행자관리</h2>
-          <RequestList
-            requests={requests}
-            updateField={updateField}
-            handleDelete={handleDelete}
-            onlyWorker
-          />
-        </div>
-      )}
+          <h2>👥 동행자 관리</h2>
 
-      {activeMenu === "정산관리" && (
-        <div style={cardStyle}>
-          <h2>📊 정산관리</h2>
-
-          <BankGuide />
-
-          <button
-            onClick={() => downloadExcel("settlement")}
-            style={buttonStyle}
-          >
-            완료 정산 엑셀 다운로드
+          <button style={blueButtonStyle} onClick={addCompanion}>
+            동행자 추가
           </button>
 
           <br />
           <br />
 
-          {requests.filter((r) => r.status === "완료").length === 0 && (
-            <p>완료된 정산 내역이 없습니다.</p>
-          )}
+          {companions.length === 0 ? (
+            <p>등록된 동행자가 없습니다.</p>
+          ) : (
+            companions.map((c) => (
+              <div
+                key={c.id}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: "10px",
+                  padding: "15px",
+                  marginBottom: "12px",
+                }}
+              >
+                <p>이름: {c.name}</p>
+                <p>상태: {c.status}</p>
 
-          {requests
-            .filter((r) => r.status === "완료")
-            .map((item) => (
-              <div key={item.id} style={itemStyle}>
-                <p>
-                  <b>동행자:</b> {item.worker || "미지정"}
-                </p>
-                <p>
-                  <b>신청자:</b> {item.name}
-                </p>
-                <p>
-                  <b>병원:</b> {item.hospital}
-                </p>
-                <p>
-                  <b>날짜:</b> {item.date}
-                </p>
-                <p>
-                  <b>결제:</b> {item.payment}
-                </p>
+                <button
+                  style={{
+                    ...smallButtonStyle,
+                    background: "#ef4444",
+                    color: "white",
+                  }}
+                  onClick={() => deleteCompanion(c.id)}
+                >
+                  삭제
+                </button>
               </div>
-            ))}
+            ))
+          )}
+        </div>
+      )}
+
+      {activeMenu === "정산관리" && (
+        <div style={cardStyle}>
+          <h2>💰 정산관리</h2>
+          <p>동행자별 정산 기능을 연결할 수 있습니다.</p>
+          <p>현재 신청 건수: {requests.length}건</p>
         </div>
       )}
 
       {activeMenu === "알림센터" && (
-        <NotificationCenter
-          notifications={notifications}
-          markAllRead={markAllRead}
-          clearNotifications={clearNotifications}
-        />
+        <div style={cardStyle}>
+          <h2>🔔 알림센터</h2>
+
+          {notifications.length === 0 ? (
+            <p>알림이 없습니다.</p>
+          ) : (
+            notifications.map((n) => (
+              <div
+                key={n.id}
+                style={{
+                  borderBottom: "1px solid #eee",
+                  padding: "10px 0",
+                }}
+              >
+                <p>{n.text}</p>
+                <small>{n.time}</small>
+              </div>
+            ))
+          )}
+        </div>
       )}
 
       {activeMenu === "설정" && (
         <div style={cardStyle}>
           <h2>⚙ 설정</h2>
-          <p>
-            <b>서비스명:</b> 다솜프로미스 동행서비스
-          </p>
-          <p>
-            <b>관리자 아이디:</b> admin
-          </p>
-          <p>
-            <b>동행자 아이디:</b> worker
-          </p>
+          <p>관리자 기본 설정 화면입니다.</p>
+          <p>로그인 아이디: admin</p>
+          <p>비밀번호: 1234</p>
+        </div>
+      )}
 
-          <BankGuide />
+      {activeMenu === "위치공유" && (
+        <div style={cardStyle}>
+          <h2>📍 위치공유</h2>
 
-          <div style={messageBoxStyle}>
-            <h3>📱 보호자 안내문</h3>
-            <p>
-              안녕하세요. 다솜프로미스 동행서비스입니다.
-              <br />
-              병원동행 예약이 접수되었습니다.
-              <br />
-              <br />
-              [입금계좌]
-              <br />
-              {BANK_INFO.bank} {BANK_INFO.account}
-              <br />
-              예금주: {BANK_INFO.owner}
-              <br />
-              <br />
-              입금 확인 후 예약이 확정됩니다.
-              <br />
-              감사합니다.
-            </p>
-          </div>
+          <p>현재 기기의 위치를 확인합니다.</p>
+
+          <button style={blueButtonStyle} onClick={getCurrentLocation}>
+            현재 위치 가져오기
+            {currentLocation && (
+  <button
+    style={{
+      ...blueButtonStyle,
+      marginTop: "10px",
+      background: "#16a34a",
+    }}
+    onClick={() => {
+      const match = currentLocation.match(
+        /위도: (.*), 경도: (.*)/
+      );
+
+      if (!match) return;
+
+      const lat = match[1];
+      const lng = match[2];
+
+      window.open(
+        `https://www.google.com/maps?q=${lat},${lng}`,
+        "_blank"
+      );
+    }}
+  >
+    지도에서 보기
+  </button>
+)}
+          </button>
+
+          {currentLocation && (
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "15px",
+                background: "#f9fafb",
+                borderRadius: "10px",
+              }}
+            >
+              <strong>현재 위치</strong>
+              <p>{currentLocation}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-
-function BankGuide() {
-  return (
-    <div style={bankBoxStyle}>
-      <h3>💳 계좌이체 안내</h3>
-      <p>
-        <b>은행:</b> {BANK_INFO.bank}
-      </p>
-      <p>
-        <b>계좌번호:</b> {BANK_INFO.account}
-      </p>
-      <p>
-        <b>예금주:</b> {BANK_INFO.owner}
-      </p>
-      <p style={{ color: "#2563eb", fontWeight: "bold" }}>
-        입금 후 관리자 확인 뒤 결제완료 처리됩니다.
-      </p>
-    </div>
-  );
-}
-
-function WorkerRequestList({ requests, updateField, handleAcceptRequest }) {
-  return (
-    <div style={cardStyle}>
-      <h2>📋 배정 가능한 신청</h2>
-
-      {requests.length === 0 && <p>신청 내역이 없습니다.</p>}
-
-      {requests
-        .filter((item) => !item.worker || item.worker === "worker")
-        .map((item) => (
-          <div key={item.id} style={itemStyle}>
-            <p>
-              <b>신청자:</b> {item.name}
-            </p>
-            <p>
-              <b>병원:</b> {item.hospital}
-            </p>
-            <p>
-              <b>날짜:</b> {item.date}
-            </p>
-            <p>
-              <b>시간:</b> {item.time}
-            </p>
-            <p>
-              <b>상태:</b> {item.status}
-            </p>
-            <p>
-              <b>결제:</b> {item.payment}
-            </p>
-
-            {!item.worker && (
-              <button
-                style={buttonStyle}
-                onClick={() => handleAcceptRequest(item)}
-              >
-                이 신청 수락하기
-              </button>
-            )}
-
-            {item.worker === "worker" && (
-              <>
-                <p style={{ color: "#2563eb", fontWeight: "bold" }}>
-                  ✅ 내가 수락한 신청입니다.
-                </p>
-
-                <button
-                  style={buttonStyle}
-                  onClick={() => updateField(item.id, "status", "진행중")}
-                >
-                  진행중으로 변경
-                </button>
-
-                <button
-                  style={{ ...buttonStyle, marginTop: 10 }}
-                  onClick={() => updateField(item.id, "status", "완료")}
-                >
-                  완료로 변경
-                </button>
-              </>
-            )}
-          </div>
-        ))}
-    </div>
-  );
-}
-
-function RequestList({ requests, updateField, handleDelete, onlyWorker }) {
-  return (
-    <div style={cardStyle}>
-      <h2>📦 신청 목록</h2>
-
-      {requests.length === 0 && <p>신청 내역이 없습니다.</p>}
-
-      {requests.map((item) => (
-        <div key={item.id} style={itemStyle}>
-          {!onlyWorker && (
-            <>
-              <p>
-                <b>신청자:</b> {item.name}
-              </p>
-              <p>
-                <b>연락처:</b> {item.phone}
-              </p>
-              <p>
-                <b>병원:</b> {item.hospital}
-              </p>
-              <p>
-                <b>날짜:</b> {item.date}
-              </p>
-              <p>
-                <b>시간:</b> {item.time}
-              </p>
-
-              <label style={labelStyle}>
-                상태
-                <select
-                  value={item.status || "대기중"}
-                  onChange={(e) =>
-                    updateField(item.id, "status", e.target.value)
-                  }
-                  style={inputStyle}
-                >
-                  <option>대기중</option>
-                  <option>배정완료</option>
-                  <option>진행중</option>
-                  <option>완료</option>
-                  <option>취소</option>
-                </select>
-              </label>
-
-              <label style={labelStyle}>
-                결제
-                <select
-                  value={item.payment || "미결제"}
-                  onChange={(e) =>
-                    updateField(item.id, "payment", e.target.value)
-                  }
-                  style={inputStyle}
-                >
-                  <option>미결제</option>
-                  <option>입금확인중</option>
-                  <option>입금완료</option>
-                  <option>결제완료</option>
-                </select>
-              </label>
-            </>
-          )}
-
-          <label style={labelStyle}>
-            동행자
-            <input
-              value={item.worker || ""}
-              placeholder="동행자 이름"
-              onChange={(e) => updateField(item.id, "worker", e.target.value)}
-              style={inputStyle}
-            />
-          </label>
-
-          {!onlyWorker && (
-            <button onClick={() => handleDelete(item.id)} style={deleteStyle}>
-              삭제
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function NotificationCenter({
-  notifications,
-  markAllRead,
-  clearNotifications,
-}) {
-  return (
-    <div style={cardStyle}>
-      <h2>🔔 알림센터</h2>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
-        <button onClick={markAllRead} style={smallButtonStyle}>
-          모두 읽음
-        </button>
-        <button onClick={clearNotifications} style={smallDangerButtonStyle}>
-          알림 삭제
-        </button>
-      </div>
-
-      {notifications.length === 0 && <p>알림 내역이 없습니다.</p>}
-
-      {notifications.map((noti) => (
-        <div
-          key={noti.id}
-          style={{
-            ...itemStyle,
-            background: noti.read ? "#fff" : "#eef4ff",
-          }}
-        >
-          <p style={{ margin: 0 }}>{noti.message}</p>
-          <p style={{ fontSize: 12, color: "#777" }}>{noti.time}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const pageStyle = {
-  padding: "16px",
-  fontFamily: "sans-serif",
-  background: "#f5f5f5",
-  minHeight: "100vh",
-  maxWidth: "900px",
-  margin: "0 auto",
-  boxSizing: "border-box",
-};
-
-const loginBoxStyle = {
-  width: "100%",
-  maxWidth: "400px",
-  margin: "60px auto",
-  background: "white",
-  padding: "24px",
-  borderRadius: "14px",
-  textAlign: "center",
-  boxSizing: "border-box",
-};
-
-const topStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "10px",
-  flexWrap: "wrap",
-};
-
-const titleStyle = {
-  fontSize: "clamp(22px, 5vw, 32px)",
-  margin: "10px 0",
-};
-
-const menuStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-  gap: "10px",
-  marginBottom: "20px",
-};
-
-const menuButtonStyle = {
-  border: "1px solid #ddd",
-  padding: "13px 10px",
-  borderRadius: "10px",
-  cursor: "pointer",
-  fontWeight: "bold",
-  fontSize: "15px",
-};
-
-const cardStyle = {
-  background: "white",
-  padding: "18px",
-  borderRadius: "14px",
-  marginBottom: "20px",
-  boxSizing: "border-box",
-};
-
-const itemStyle = {
-  border: "1px solid #ddd",
-  borderRadius: "12px",
-  padding: "15px",
-  marginBottom: "15px",
-  background: "#fff",
-};
-
-const bankBoxStyle = {
-  background: "#eef4ff",
-  border: "1px solid #c7d7ff",
-  padding: "15px",
-  borderRadius: "12px",
-  marginBottom: "20px",
-};
-
-const messageBoxStyle = {
-  background: "#f8fafc",
-  border: "1px solid #ddd",
-  padding: "15px",
-  borderRadius: "12px",
-  marginTop: "20px",
-};
-
-const noticeBoxStyle = {
-  background: "#eef4ff",
-  border: "1px solid #c7d7ff",
-  padding: "12px",
-  borderRadius: "12px",
-  marginBottom: "15px",
-  fontWeight: "bold",
-};
-
-const inputStyle = {
-  display: "block",
-  width: "100%",
-  padding: "13px",
-  marginBottom: "12px",
-  borderRadius: "8px",
-  border: "1px solid #ccc",
-  boxSizing: "border-box",
-  fontSize: "16px",
-};
-
-const labelStyle = {
-  display: "block",
-  fontWeight: "bold",
-  marginTop: "10px",
-};
-
-const buttonStyle = {
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  padding: "14px 20px",
-  borderRadius: "10px",
-  cursor: "pointer",
-  width: "100%",
-  fontSize: "16px",
-  fontWeight: "bold",
-};
-
-const smallButtonStyle = {
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  padding: "10px 14px",
-  borderRadius: "8px",
-  cursor: "pointer",
-};
-
-const smallDangerButtonStyle = {
-  background: "red",
-  color: "white",
-  border: "none",
-  padding: "10px 14px",
-  borderRadius: "8px",
-  cursor: "pointer",
-};
-
-const logoutStyle = {
-  background: "#111827",
-  color: "white",
-  border: "none",
-  padding: "10px 14px",
-  borderRadius: "8px",
-  cursor: "pointer",
-};
-
-const deleteStyle = {
-  background: "red",
-  color: "white",
-  border: "none",
-  padding: "11px 16px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  width: "100%",
-  fontSize: "15px",
-};
