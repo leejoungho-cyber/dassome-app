@@ -535,7 +535,34 @@ export default function App() {
 >
   현재 위치 저장
 </button>
+{c.location && (
+  <button
+    style={{
+      ...smallButtonStyle,
+      background: "#2563eb",
+      color: "white",
+      marginLeft: "8px",
+    }}
+    onClick={() => {
+      const match = c.location.match(/위도: (.*), 경도: (.*)/);
 
+      if (!match) {
+        alert("저장된 위치가 없습니다.");
+        return;
+      }
+
+      const lat = match[1];
+      const lng = match[2];
+
+      window.open(
+        `https://www.google.com/maps?q=${lat},${lng}`,
+        "_blank"
+      );
+    }}
+  >
+    지도에서 보기
+  </button>
+)}
 {c.location && (
   <button
     style={{
