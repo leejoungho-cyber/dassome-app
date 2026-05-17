@@ -2,12 +2,12 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBU4WCiS7E8W7pb4bjo7",
-  authDomain: "dasome-companion.firebaseapp.com",
-  projectId: "dasome-companion",
-  storageBucket: "dasome-companion.firebasestorage.app",
-  messagingSenderId: "638156716805",
-  appId: "1:638156716805:web:88de1f2ac"
+  apiKey: "AIzaSyDAMS-QSYjjCz8uPufU-oRwKQHM_jz5Dy8",
+  authDomain: "dasome-platform.firebaseapp.com",
+  projectId: "dasome-platform",
+  storageBucket: "dasome-platform.firebasestorage.app",
+  messagingSenderId: "670405525258",
+  appId: "1:670405525258:web:3a8c39ed3f29c984c044f3",
 };
 
 const app = initializeApp(firebaseConfig);
