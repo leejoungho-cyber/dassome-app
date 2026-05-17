@@ -1,4 +1,14 @@
 import { useEffect, useState } from "react";
+import { db } from "./firebase";
+
+import {
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+} from "firebase/firestore";
 
 export default function App() {
   const [isLogin, setIsLogin] = useState(false);
@@ -18,15 +28,116 @@ export default function App() {
     time: "",
   });
 
-  useEffect(() => {
-    setRequests(JSON.parse(localStorage.getItem("requests") || "[]"));
-    setCompanions(JSON.parse(localStorage.getItem("companions") || "[]"));
-    setNotifications(JSON.parse(localStorage.getItem("notifications") || "[]"));
-  }, []);
+  const [loading, setLoading] = useState(false);
 
-  const saveLocal = (key, data) => {
-    localStorage.setItem(key, JSON.stringify(data));
+  const loadRequests = async () => {
+    const snapshot = await getDocs(collection(db, "requests"));
+    const data = [];
+
+    snapshot.forEach((docSnap) => {
+      data.push({
+        id: docSnap.id,
+        ...docSnap.data(),
+      });
+    });
+
+    setRequests(data);
   };
+
+  const loadCompanions = async () => {
+    const snapshot = await getDocs(collection(db, "companions"));
+    const data = [];
+
+    snapshot.forEach((docSnap) => {
+      data.push({
+        id: docSnap.id,
+        ...docSnap.data(),
+      });
+    });
+
+    setCompanions(data);
+  };
+
+  const loadNotifications = async () => {
+    const snapshot = await getDocs(collection(db, "notifications"));
+    const data = [];
+
+    snapshot.forEach((docSnap) => {
+      data.push({
+        id: docSnap.id,
+        ...docSnap.data(),
+      });
+    });
+
+    setNotifications(data);
+  };
+
+  const loadAllData = async () => {
+    try {
+      await loadRequests();
+      await loadCompanions();
+      await loadNotifications();
+    } catch (error) {
+      console.error(error);
+      alert("Firebase 데이터를 불러오지 못했습니다.");
+    }
+  };
+
+ useEffect(() => {
+  const unsubRequests = onSnapshot(
+    collection(db, "requests"),
+    (snapshot) => {
+      const data = [];
+
+      snapshot.forEach((docSnap) => {
+        data.push({
+          id: docSnap.id,
+          ...docSnap.data(),
+        });
+      });
+
+      setRequests(data);
+    }
+  );
+
+  const unsubCompanions = onSnapshot(
+    collection(db, "companions"),
+    (snapshot) => {
+      const data = [];
+
+      snapshot.forEach((docSnap) => {
+        data.push({
+          id: docSnap.id,
+          ...docSnap.data(),
+        });
+      });
+
+      setCompanions(data);
+    }
+  );
+
+  const unsubNotifications = onSnapshot(
+    collection(db, "notifications"),
+    (snapshot) => {
+      const data = [];
+
+      snapshot.forEach((docSnap) => {
+        data.push({
+          id: docSnap.id,
+          ...docSnap.data(),
+        });
+      });
+
+      setNotifications(data);
+    }
+  );
+
+  return () => {
+    unsubRequests();
+    unsubCompanions();
+    unsubNotifications();
+  };
+}, []); 
 
   const handleLogin = () => {
     if (loginForm.id === "admin" && loginForm.pw === "1234") {
@@ -40,160 +151,176 @@ export default function App() {
     setIsLogin(false);
   };
 
-  const addNotification = (text) => {
+  const addNotification = async (text) => {
     const newNoti = {
-      id: Date.now(),
       text,
       read: false,
       time: new Date().toLocaleString(),
     };
 
-    const updated = [newNoti, ...notifications];
-    setNotifications(updated);
-    saveLocal("notifications", updated);
+    try {
+      await addDoc(collection(db, "notifications"), newNoti);
+      await loadNotifications();
+    } catch (error) {
+      console.error(error);
+    }
   };
 
-  const markAllRead = () => {
-    const updated = notifications.map((n) => ({
-      ...n,
-      read: true,
-    }));
+  const markAllRead = async () => {
+    try {
+      for (const n of notifications) {
+        if (!n.read) {
+          await updateDoc(doc(db, "notifications", n.id), {
+            read: true,
+          });
+        }
+      }
 
-    setNotifications(updated);
-    saveLocal("notifications", updated);
+      await loadNotifications();
+    } catch (error) {
+      console.error(error);
+    }
   };
 
-  const saveRequest = () => {
+  const saveRequest = async () => {
     if (!form.name || !form.phone) {
       alert("신청자 이름과 연락처를 입력하세요.");
       return;
     }
 
+    setLoading(true);
+
     const newRequest = {
-      id: Date.now(),
       ...form,
       status: "대기중",
       payment: "미결제",
       createdAt: new Date().toLocaleString(),
     };
 
-    const updated = [newRequest, ...requests];
-    setRequests(updated);
-    saveLocal("requests", updated);
+    try {
+      await addDoc(collection(db, "requests"), newRequest);
+      await addNotification(`${form.name}님의 신청이 등록되었습니다.`);
 
-    addNotification(`${form.name}님의 신청이 등록되었습니다.`);
+      setForm({
+        name: "",
+        phone: "",
+        hospital: "",
+        date: "",
+        time: "",
+      });
 
-    setForm({
-      name: "",
-      phone: "",
-      hospital: "",
-      date: "",
-      time: "",
-    });
+      await loadRequests();
+      alert("신청이 Firebase에 저장되었습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("신청 저장 실패");
+    }
+
+    setLoading(false);
   };
 
-  const updateRequest = (id, field, value) => {
-    const updated = requests.map((r) =>
-      r.id === id ? { ...r, [field]: value } : r
-    );
+  const updateRequest = async (id, field, value) => {
+    try {
+      await updateDoc(doc(db, "requests", id), {
+        [field]: value,
+      });
 
-    setRequests(updated);
-    saveLocal("requests", updated);
+      await loadRequests();
+    } catch (error) {
+      console.error(error);
+      alert("수정 실패");
+    }
   };
 
-  const deleteRequest = (id) => {
+  const deleteRequest = async (id) => {
     if (!confirm("삭제하시겠습니까?")) return;
 
-    const updated = requests.filter((r) => r.id !== id);
-    setRequests(updated);
-    saveLocal("requests", updated);
+    try {
+      await deleteDoc(doc(db, "requests", id));
+      await loadRequests();
+    } catch (error) {
+      console.error(error);
+      alert("삭제 실패");
+    }
   };
 
-  const addCompanion = () => {
-    const name = prompt("동행자 이름을 입력하세요.");
+  const addCompanion = async () => {
+  const name = prompt("동행자 이름을 입력하세요.");
 
-    if (!name) return;
-
-    const newCompanion = {
-      id: Date.now(),
-      name,
-      status: "대기",
-      memo: "",
-    };
-
-    const updated = [...companions, newCompanion];
-    setCompanions(updated);
-    saveLocal("companions", updated);
-  };
-
-  const deleteCompanion = (id) => {
-    const updated = companions.filter((c) => c.id !== id);
-    setCompanions(updated);
-    saveLocal("companions", updated);
-  };const saveCompanionLocation = (id) => {
-  if (!navigator.geolocation) {
-    alert("이 기기는 위치공유를 지원하지 않습니다.");
+  if (!name) {
+    alert("동행자 이름을 입력해야 합니다.");
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
+  const newCompanion = {
+    name,
+    status: "대기",
+    memo: "",
+    location: "",
+    locationTime: "",
+    createdAt: new Date().toLocaleString(),
+  };
 
-      const updated = companions.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              location: `위도: ${lat}, 경도: ${lng}`,
-              locationTime: new Date().toLocaleString(),
-            }
-          : c
-      );
+  try {
+    await addDoc(
+      collection(db, "companions"),
+      newCompanion
+    );
 
-      setCompanions(updated);
-      saveLocal("companions", updated);
+    alert("동행자가 저장되었습니다.");
+  } catch (error) {
+    console.error(error);
 
-      alert("동행자 위치가 저장되었습니다.");
-    },
-    () => {
-      alert("위치 정보를 가져오지 못했습니다.");
-    }
-  );
+       alert(
+      "동행자 저장 실패"
+    );
+  }
 };
+
+  const deleteCompanion = async (id) => {
+    if (!confirm("동행자를 삭제하시겠습니까?")) return;
+
+    try {
+      await deleteDoc(doc(db, "companions", id));
+      await loadCompanions();
+    } catch (error) {
+      console.error(error);
+      alert("동행자 삭제 실패");
+    }
+  };  const saveCompanionLocation = async (id) => {
+    if (!navigator.geolocation) {
+      alert("이 기기는 위치공유를 지원하지 않습니다.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        const locationText = `위도: ${lat}, 경도: ${lng}`;
+        const locationTime = new Date().toLocaleString();
+
+        try {
+          await updateDoc(doc(db, "companions", id), {
+            location: locationText,
+            locationTime,
+          });
+
+          await loadCompanions();
+          alert("동행자 위치가 Firebase에 저장되었습니다.");
+        } catch (error) {
+          console.error(error);
+          alert("위치 저장 실패");
+        }
+      },
+      () => {
+        alert("위치 정보를 가져오지 못했습니다.");
+      }
+    );
+  };
 
   const getCurrentLocation = () => {
-    const saveCompanionLocation = (id) => {
-  if (!navigator.geolocation) {
-    alert("이 기기는 위치공유를 지원하지 않습니다.");
-    return;
-  }
-
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-
-      const updated = companions.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              location: `위도: ${lat}, 경도: ${lng}`,
-              locationTime: new Date().toLocaleString(),
-            }
-          : c
-      );
-
-      setCompanions(updated);
-      saveLocal("companions", updated);
-
-      alert("동행자 위치가 저장되었습니다.");
-    },
-    () => {
-      alert("위치 정보를 가져오지 못했습니다.");
-    }
-  );
-};
     if (!navigator.geolocation) {
       alert("이 기기는 위치공유를 지원하지 않습니다.");
       return;
@@ -408,8 +535,12 @@ export default function App() {
               onChange={(e) => setForm({ ...form, time: e.target.value })}
             />
 
-            <button style={blueButtonStyle} onClick={saveRequest}>
-              저장하기
+            <button
+              style={blueButtonStyle}
+              onClick={saveRequest}
+              disabled={loading}
+            >
+              {loading ? "저장 중..." : "저장하기"}
             </button>
           </div>
 
@@ -506,132 +637,52 @@ export default function App() {
                 }}
               >
                 <p>이름: {c.name}</p>
-               <p>상태: {c.status}</p>
-<p>위치: {c.location || "위치 없음"}</p>
-
-<button
-  style={{
-    ...smallButtonStyle,
-    background: "#16a34a",
-    color: "white",
-    marginRight: "8px",
-  }}
-  onClick={() => saveCompanionLocation(c.id)}
->
-  현재 위치 저장
-</button>
-<p>위치: {c.location || "위치 없음"}</p>
-
-<p>확인시간: {c.locationTime || "기록 없음"}</p>
-
-<button
-  style={{
-    ...smallButtonStyle,
-    background: "#16a34a",
-    color: "white",
-    marginRight: "8px",
-  }}
-  onClick={() => saveCompanionLocation(c.id)}
->
-  현재 위치 저장
-</button>
-{c.location && (
-  <button
-    style={{
-      ...smallButtonStyle,
-      background: "#2563eb",
-      color: "white",
-      marginLeft: "8px",
-    }}
-    onClick={() => {
-      const match = c.location.match(/위도: (.*), 경도: (.*)/);
-
-      if (!match) {
-        alert("저장된 위치가 없습니다.");
-        return;
-      }
-
-      const lat = match[1];
-      const lng = match[2];
-
-      window.open(
-        `https://www.google.com/maps?q=${lat},${lng}`,
-        "_blank"
-      );
-    }}
-  >
-    지도에서 보기
-  </button>
-)}
-{c.location && (
-  <button
-    style={{
-      ...smallButtonStyle,
-      background: "#2563eb",
-      color: "white",
-    }}
-    onClick={() => {
-      const match = c.location.match(
-        /위도: (.*), 경도: (.*)/
-      );
-
-      if (!match) return;
-
-      const lat = match[1];
-      const lng = match[2];
-
-      window.open(
-        `https://www.google.com/maps?q=${lat},${lng}`,
-        "_blank"
-      );
-    }}
-  >
-    지도에서 보기
-  </button>
-)} 
                 <p>상태: {c.status}</p>
-<p>위치: {c.location || "위치 없음"}</p>
-<p>확인시간: {c.locationTime || "기록 없음"}</p>
+                <p>위치: {c.location || "위치 없음"}</p>
+                <p>확인시간: {c.locationTime || "기록 없음"}</p>
 
-<button
-  style={{
-    ...smallButtonStyle,
-    background: "#16a34a",
-    color: "white",
-    marginRight: "8px",
-  }}
-  onClick={() => saveCompanionLocation(c.id)}
->
-  현재 위치 저장
-</button>
- {c.location && (
-  <button
-    style={{
-      ...smallButtonStyle,
-      background: "#2563eb",
-      color: "white",
-      marginLeft: "8px",
-    }}
-    onClick={() => {
-      const match = c.location.match(/위도: (.*), 경도: (.*)/);
+                <button
+                  style={{
+                    ...smallButtonStyle,
+                    background: "#16a34a",
+                    color: "white",
+                    marginRight: "8px",
+                  }}
+                  onClick={() => saveCompanionLocation(c.id)}
+                >
+                  현재 위치 저장
+                </button>
 
-      if (!match) {
-        alert("저장된 위치가 없습니다.");
-        return;
-      }
+                {c.location && (
+                  <button
+                    style={{
+                      ...smallButtonStyle,
+                      background: "#2563eb",
+                      color: "white",
+                    }}
+                    onClick={() => {
+                      const match = c.location.match(/위도: (.*), 경도: (.*)/);
 
-      const lat = match[1];
-      const lng = match[2];
+                      if (!match) {
+                        alert("저장된 위치가 없습니다.");
+                        return;
+                      }
 
-      window.open(
-        `https://www.google.com/maps?q=${lat},${lng}`,
-        "_blank"
-      );
-    }}
-  >
-    지도에서 보기
-  </button>
-)}
+                      const lat = match[1];
+                      const lng = match[2];
+
+                      window.open(
+                        `https://www.google.com/maps?q=${lat},${lng}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    지도에서 보기
+                  </button>
+                )}
+
+                <br />
+
                 <button
                   style={{
                     ...smallButtonStyle,
@@ -696,32 +747,6 @@ export default function App() {
 
           <button style={blueButtonStyle} onClick={getCurrentLocation}>
             현재 위치 가져오기
-            {currentLocation && (
-  <button
-    style={{
-      ...blueButtonStyle,
-      marginTop: "10px",
-      background: "#16a34a",
-    }}
-    onClick={() => {
-      const match = currentLocation.match(
-        /위도: (.*), 경도: (.*)/
-      );
-
-      if (!match) return;
-
-      const lat = match[1];
-      const lng = match[2];
-
-      window.open(
-        `https://www.google.com/maps?q=${lat},${lng}`,
-        "_blank"
-      );
-    }}
-  >
-    지도에서 보기
-  </button>
-)}
           </button>
 
           {currentLocation && (
@@ -735,6 +760,28 @@ export default function App() {
             >
               <strong>현재 위치</strong>
               <p>{currentLocation}</p>
+
+              <button
+                style={{
+                  ...blueButtonStyle,
+                  background: "#16a34a",
+                }}
+                onClick={() => {
+                  const match = currentLocation.match(/위도: (.*), 경도: (.*)/);
+
+                  if (!match) return;
+
+                  const lat = match[1];
+                  const lng = match[2];
+
+                  window.open(
+                    `https://www.google.com/maps?q=${lat},${lng}`,
+                    "_blank"
+                  );
+                }}
+              >
+                지도에서 보기
+              </button>
             </div>
           )}
         </div>
