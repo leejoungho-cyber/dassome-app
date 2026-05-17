@@ -11,9 +11,11 @@ import { db } from "./firebase";
 
 const ADMIN_ID = "admin";
 const ADMIN_PW = "1234";
+const WORKER_ID = "worker";
+const WORKER_PW = "1234";
 
 export default function App() {
-  const [isLogin, setIsLogin] = useState(false);
+  const [userType, setUserType] = useState("");
   const [activeMenu, setActiveMenu] = useState("신청관리");
   const [loginForm, setLoginForm] = useState({ id: "", pw: "" });
 
@@ -31,13 +33,12 @@ export default function App() {
   const [requests, setRequests] = useState([]);
 
   useEffect(() => {
-    if (localStorage.getItem("dasom_admin_login") === "true") {
-      setIsLogin(true);
-    }
+    const savedType = localStorage.getItem("dasom_user_type");
+    if (savedType) setUserType(savedType);
   }, []);
 
   useEffect(() => {
-    if (!isLogin) return;
+    if (!userType) return;
 
     const unsub = onSnapshot(collection(db, "requests"), (snapshot) => {
       const list = snapshot.docs.map((d) => ({
@@ -48,20 +49,28 @@ export default function App() {
     });
 
     return () => unsub();
-  }, [isLogin]);
+  }, [userType]);
 
   const handleLogin = () => {
     if (loginForm.id === ADMIN_ID && loginForm.pw === ADMIN_PW) {
-      localStorage.setItem("dasom_admin_login", "true");
-      setIsLogin(true);
-    } else {
-      alert("아이디 또는 비밀번호가 틀렸습니다.");
+      localStorage.setItem("dasom_user_type", "admin");
+      setUserType("admin");
+      return;
     }
+
+    if (loginForm.id === WORKER_ID && loginForm.pw === WORKER_PW) {
+      localStorage.setItem("dasom_user_type", "worker");
+      setUserType("worker");
+      return;
+    }
+
+    alert("아이디 또는 비밀번호가 틀렸습니다.");
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("dasom_admin_login");
-    setIsLogin(false);
+    localStorage.removeItem("dasom_user_type");
+    setUserType("");
+    setLoginForm({ id: "", pw: "" });
   };
 
   const handleSubmit = async () => {
@@ -100,11 +109,11 @@ export default function App() {
     await deleteDoc(doc(db, "requests", id));
   };
 
-  if (!isLogin) {
+  if (!userType) {
     return (
       <div style={pageStyle}>
         <div style={loginBoxStyle}>
-          <h1 style={titleStyle}>🔐 관리자 로그인</h1>
+          <h1 style={titleStyle}>🔐 로그인</h1>
           <p>다솜프로미스 동행서비스</p>
 
           <input
@@ -131,8 +140,86 @@ export default function App() {
           </button>
 
           <p style={{ fontSize: 13, color: "#777" }}>
-            아이디: admin / 비밀번호: 1234
+            관리자: admin / 1234
+            <br />
+            동행자: worker / 1234
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (userType === "worker") {
+    return (
+      <div style={pageStyle}>
+        <div style={topStyle}>
+          <h1 style={titleStyle}>👤 동행자 화면</h1>
+          <button onClick={handleLogout} style={logoutStyle}>
+            로그아웃
+          </button>
+        </div>
+
+        <div style={cardStyle}>
+          <h2>📋 배정 가능한 신청</h2>
+          <p>동행자가 직접 수락할 수 있는 화면입니다.</p>
+
+          {requests.length === 0 && <p>신청 내역이 없습니다.</p>}
+
+          {requests
+            .filter((item) => !item.worker || item.worker === "worker")
+            .map((item) => (
+              <div key={item.id} style={itemStyle}>
+                <p>
+                  <b>신청자:</b> {item.name}
+                </p>
+                <p>
+                  <b>병원:</b> {item.hospital}
+                </p>
+                <p>
+                  <b>날짜:</b> {item.date}
+                </p>
+                <p>
+                  <b>시간:</b> {item.time}
+                </p>
+                <p>
+                  <b>상태:</b> {item.status}
+                </p>
+
+                {!item.worker && (
+                  <button
+                    style={buttonStyle}
+                    onClick={() => {
+                      updateField(item.id, "worker", "worker");
+                      updateField(item.id, "status", "배정완료");
+                    }}
+                  >
+                    이 신청 수락하기
+                  </button>
+                )}
+
+                {item.worker === "worker" && (
+                  <>
+                    <p style={{ color: "#2563eb", fontWeight: "bold" }}>
+                      ✅ 내가 수락한 신청입니다.
+                    </p>
+
+                    <button
+                      style={buttonStyle}
+                      onClick={() => updateField(item.id, "status", "진행중")}
+                    >
+                      진행중으로 변경
+                    </button>
+
+                    <button
+                      style={{ ...buttonStyle, marginTop: 10 }}
+                      onClick={() => updateField(item.id, "status", "완료")}
+                    >
+                      완료로 변경
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
         </div>
       </div>
     );
@@ -223,7 +310,6 @@ export default function App() {
       {activeMenu === "동행자관리" && (
         <div style={cardStyle}>
           <h2>👥 동행자관리</h2>
-          <p>동행자 이름을 입력해 배정할 수 있습니다.</p>
           <RequestList
             requests={requests}
             updateField={updateField}
@@ -236,7 +322,6 @@ export default function App() {
       {activeMenu === "정산관리" && (
         <div style={cardStyle}>
           <h2>📊 정산관리</h2>
-          <p>완료된 건을 기준으로 정산을 확인합니다.</p>
 
           {requests.filter((r) => r.status === "완료").length === 0 && (
             <p>완료된 정산 내역이 없습니다.</p>
@@ -269,15 +354,11 @@ export default function App() {
       {activeMenu === "알림센터" && (
         <div style={cardStyle}>
           <h2>🔔 알림센터</h2>
-          <p>신청 상태 변경 내역을 확인합니다.</p>
-
-          {requests.length === 0 && <p>알림 내역이 없습니다.</p>}
 
           {requests.map((item) => (
             <div key={item.id} style={itemStyle}>
-              <p>
-                🔔 {item.name}님 신청 / 상태: {item.status}
-              </p>
+              🔔 {item.name}님 신청 / 상태: {item.status} / 동행자:{" "}
+              {item.worker || "미지정"}
             </div>
           ))}
         </div>
@@ -291,6 +372,9 @@ export default function App() {
           </p>
           <p>
             <b>관리자 아이디:</b> admin
+          </p>
+          <p>
+            <b>동행자 아이디:</b> worker
           </p>
         </div>
       )}
@@ -492,4 +576,4 @@ const deleteStyle = {
   cursor: "pointer",
   width: "100%",
   fontSize: "15px",
- }; 
+};
