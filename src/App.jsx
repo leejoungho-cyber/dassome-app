@@ -15,6 +15,12 @@ const ADMIN_PW = "1234";
 const WORKER_ID = "worker";
 const WORKER_PW = "1234";
 
+const BANK_INFO = {
+  bank: "농협",
+  account: "123-4567-8901-23",
+  owner: "다솜프로미스",
+};
+
 export default function App() {
   const [userType, setUserType] = useState("");
   const [activeMenu, setActiveMenu] = useState("신청관리");
@@ -122,7 +128,9 @@ export default function App() {
 
     XLSX.writeFile(
       workbook,
-      isSettlement ? "다솜프로미스_정산내역.xlsx" : "다솜프로미스_신청내역.xlsx"
+      isSettlement
+        ? "다솜프로미스_정산내역.xlsx"
+        : "다솜프로미스_신청내역.xlsx"
     );
   };
 
@@ -191,7 +199,9 @@ export default function App() {
 
     if (field === "worker") {
       addNotification(
-        `👤 동행자 배정: ${target?.name || "신청"}님 → ${value || "미지정"}`
+        `👤 동행자 배정: ${target?.name || "신청"}님 → ${
+          value || "미지정"
+        }`
       );
     }
   };
@@ -320,6 +330,8 @@ export default function App() {
           <div style={cardStyle}>
             <h2>📋 신청 등록</h2>
 
+            <BankGuide />
+
             <input
               placeholder="신청자 이름"
               value={form.name}
@@ -393,6 +405,8 @@ export default function App() {
         <div style={cardStyle}>
           <h2>📊 정산관리</h2>
 
+          <BankGuide />
+
           <button
             onClick={() => downloadExcel("settlement")}
             style={buttonStyle}
@@ -451,8 +465,51 @@ export default function App() {
           <p>
             <b>동행자 아이디:</b> worker
           </p>
+
+          <BankGuide />
+
+          <div style={messageBoxStyle}>
+            <h3>📱 보호자 안내문</h3>
+            <p>
+              안녕하세요. 다솜프로미스 동행서비스입니다.
+              <br />
+              병원동행 예약이 접수되었습니다.
+              <br />
+              <br />
+              [입금계좌]
+              <br />
+              {BANK_INFO.bank} {BANK_INFO.account}
+              <br />
+              예금주: {BANK_INFO.owner}
+              <br />
+              <br />
+              입금 확인 후 예약이 확정됩니다.
+              <br />
+              감사합니다.
+            </p>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function BankGuide() {
+  return (
+    <div style={bankBoxStyle}>
+      <h3>💳 계좌이체 안내</h3>
+      <p>
+        <b>은행:</b> {BANK_INFO.bank}
+      </p>
+      <p>
+        <b>계좌번호:</b> {BANK_INFO.account}
+      </p>
+      <p>
+        <b>예금주:</b> {BANK_INFO.owner}
+      </p>
+      <p style={{ color: "#2563eb", fontWeight: "bold" }}>
+        입금 후 관리자 확인 뒤 결제완료 처리됩니다.
+      </p>
     </div>
   );
 }
@@ -482,6 +539,9 @@ function WorkerRequestList({ requests, updateField, handleAcceptRequest }) {
             </p>
             <p>
               <b>상태:</b> {item.status}
+            </p>
+            <p>
+              <b>결제:</b> {item.payment}
             </p>
 
             {!item.worker && (
@@ -574,6 +634,8 @@ function RequestList({ requests, updateField, handleDelete, onlyWorker }) {
                   style={inputStyle}
                 >
                   <option>미결제</option>
+                  <option>입금확인중</option>
+                  <option>입금완료</option>
                   <option>결제완료</option>
                 </select>
               </label>
@@ -701,6 +763,22 @@ const itemStyle = {
   padding: "15px",
   marginBottom: "15px",
   background: "#fff",
+};
+
+const bankBoxStyle = {
+  background: "#eef4ff",
+  border: "1px solid #c7d7ff",
+  padding: "15px",
+  borderRadius: "12px",
+  marginBottom: "20px",
+};
+
+const messageBoxStyle = {
+  background: "#f8fafc",
+  border: "1px solid #ddd",
+  padding: "15px",
+  borderRadius: "12px",
+  marginTop: "20px",
 };
 
 const noticeBoxStyle = {
