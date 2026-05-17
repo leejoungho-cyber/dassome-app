@@ -130,9 +130,70 @@ export default function App() {
     const updated = companions.filter((c) => c.id !== id);
     setCompanions(updated);
     saveLocal("companions", updated);
-  };
+  };const saveCompanionLocation = (id) => {
+  if (!navigator.geolocation) {
+    alert("이 기기는 위치공유를 지원하지 않습니다.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      const updated = companions.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              location: `위도: ${lat}, 경도: ${lng}`,
+              locationTime: new Date().toLocaleString(),
+            }
+          : c
+      );
+
+      setCompanions(updated);
+      saveLocal("companions", updated);
+
+      alert("동행자 위치가 저장되었습니다.");
+    },
+    () => {
+      alert("위치 정보를 가져오지 못했습니다.");
+    }
+  );
+};
 
   const getCurrentLocation = () => {
+    const saveCompanionLocation = (id) => {
+  if (!navigator.geolocation) {
+    alert("이 기기는 위치공유를 지원하지 않습니다.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      const updated = companions.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              location: `위도: ${lat}, 경도: ${lng}`,
+              locationTime: new Date().toLocaleString(),
+            }
+          : c
+      );
+
+      setCompanions(updated);
+      saveLocal("companions", updated);
+
+      alert("동행자 위치가 저장되었습니다.");
+    },
+    () => {
+      alert("위치 정보를 가져오지 못했습니다.");
+    }
+  );
+};
     if (!navigator.geolocation) {
       alert("이 기기는 위치공유를 지원하지 않습니다.");
       return;
@@ -445,8 +506,105 @@ export default function App() {
                 }}
               >
                 <p>이름: {c.name}</p>
-                <p>상태: {c.status}</p>
+               <p>상태: {c.status}</p>
+<p>위치: {c.location || "위치 없음"}</p>
 
+<button
+  style={{
+    ...smallButtonStyle,
+    background: "#16a34a",
+    color: "white",
+    marginRight: "8px",
+  }}
+  onClick={() => saveCompanionLocation(c.id)}
+>
+  현재 위치 저장
+</button>
+<p>위치: {c.location || "위치 없음"}</p>
+
+<p>확인시간: {c.locationTime || "기록 없음"}</p>
+
+<button
+  style={{
+    ...smallButtonStyle,
+    background: "#16a34a",
+    color: "white",
+    marginRight: "8px",
+  }}
+  onClick={() => saveCompanionLocation(c.id)}
+>
+  현재 위치 저장
+</button>
+
+{c.location && (
+  <button
+    style={{
+      ...smallButtonStyle,
+      background: "#2563eb",
+      color: "white",
+    }}
+    onClick={() => {
+      const match = c.location.match(
+        /위도: (.*), 경도: (.*)/
+      );
+
+      if (!match) return;
+
+      const lat = match[1];
+      const lng = match[2];
+
+      window.open(
+        `https://www.google.com/maps?q=${lat},${lng}`,
+        "_blank"
+      );
+    }}
+  >
+    지도에서 보기
+  </button>
+)} 
+                <p>상태: {c.status}</p>
+<p>위치: {c.location || "위치 없음"}</p>
+<p>확인시간: {c.locationTime || "기록 없음"}</p>
+
+<button
+  style={{
+    ...smallButtonStyle,
+    background: "#16a34a",
+    color: "white",
+    marginRight: "8px",
+  }}
+  onClick={() => saveCompanionLocation(c.id)}
+>
+  현재 위치 저장
+</button>
+ {c.location && (
+  <button
+    style={{
+      ...smallButtonStyle,
+      background: "#2563eb",
+      color: "white",
+      marginLeft: "8px",
+    }}
+    onClick={() => {
+      const match = c.location.match(/위도: (.*), 경도: (.*)/);
+
+      if (!match) {
+        alert("저장된 위치가 없습니다.");
+        return;
+      }
+
+      const lat = match[1];
+      const lng = match[2];
+
+      window.open(
+        `https://www.google.com/maps?q=${lat},${lng}`,
+        "_blank"
+      );
+    }}
+  >
+    지도에서 보기
+  </button>
+)}
                 <button
                   style={{
                     ...smallButtonStyle,
