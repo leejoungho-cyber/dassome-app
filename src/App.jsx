@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -18,6 +19,9 @@ export default function App() {
   const [userType, setUserType] = useState("");
   const [activeMenu, setActiveMenu] = useState("신청관리");
   const [loginForm, setLoginForm] = useState({ id: "", pw: "" });
+  const [requests, setRequests] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [form, setForm] = useState({
     name: "",
@@ -30,8 +34,6 @@ export default function App() {
     worker: "",
   });
 
-  const [requests, setRequests] = useState([]);
-
   useEffect(() => {
     const savedType = localStorage.getItem("dasom_user_type");
     if (savedType) setUserType(savedType);
@@ -39,6 +41,13 @@ export default function App() {
 
   useEffect(() => {
     if (!userType) return;
+
+    const savedNotifications = localStorage.getItem("dasom_notifications");
+    if (savedNotifications) {
+      const list = JSON.parse(savedNotifications);
+      setNotifications(list);
+      setUnreadCount(list.filter((n) => !n.read).length);
+    }
 
     const unsub = onSnapshot(collection(db, "requests"), (snapshot) => {
       const list = snapshot.docs.map((d) => ({
@@ -50,6 +59,35 @@ export default function App() {
 
     return () => unsub();
   }, [userType]);
+
+  const addNotification = (message) => {
+    const newNoti = {
+      id: Date.now(),
+      message,
+      read: false,
+      time: new Date().toLocaleString(),
+    };
+
+    const newList = [newNoti, ...notifications].slice(0, 50);
+
+    setNotifications(newList);
+    setUnreadCount(newList.filter((n) => !n.read).length);
+    localStorage.setItem("dasom_notifications", JSON.stringify(newList));
+  };
+
+  const markAllRead = () => {
+    const newList = notifications.map((n) => ({ ...n, read: true }));
+    setNotifications(newList);
+    setUnreadCount(0);
+    localStorage.setItem("dasom_notifications", JSON.stringify(newList));
+  };
+
+  const clearNotifications = () => {
+    if (!window.confirm("알림을 모두 삭제하시겠습니까?")) return;
+    setNotifications([]);
+    setUnreadCount(0);
+    localStorage.removeItem("dasom_notifications");
+  };
 
   const handleLogin = () => {
     if (loginForm.id === ADMIN_ID && loginForm.pw === ADMIN_PW) {
@@ -84,6 +122,8 @@ export default function App() {
       createdAt: new Date(),
     });
 
+    addNotification(`🆕 신규 신청: ${form.name}님 / ${form.hospital}`);
+
     alert("저장 완료");
 
     setForm({
@@ -99,14 +139,47 @@ export default function App() {
   };
 
   const updateField = async (id, field, value) => {
+    const target = requests.find((r) => r.id === id);
+
     await updateDoc(doc(db, "requests", id), {
       [field]: value,
     });
+
+    if (field === "status") {
+      addNotification(
+        `🚦 상태 변경: ${target?.name || "신청"}님 → ${value}`
+      );
+    }
+
+    if (field === "payment") {
+      addNotification(
+        `💳 결제 변경: ${target?.name || "신청"}님 → ${value}`
+      );
+    }
+
+    if (field === "worker") {
+      addNotification(
+        `👤 동행자 배정: ${target?.name || "신청"}님 → ${value || "미지정"}`
+      );
+    }
+  };
+
+  const handleAcceptRequest = async (item) => {
+    await updateDoc(doc(db, "requests", item.id), {
+      worker: "worker",
+      status: "배정완료",
+    });
+
+    addNotification(`✅ 동행자 수락: ${item.name}님 신청`);
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("삭제하시겠습니까?")) return;
+
+    const target = requests.find((r) => r.id === id);
     await deleteDoc(doc(db, "requests", id));
+
+    addNotification(`🗑 신청 삭제: ${target?.name || "신청"}님`);
   };
 
   if (!userType) {
@@ -159,68 +232,21 @@ export default function App() {
           </button>
         </div>
 
-        <div style={cardStyle}>
-          <h2>📋 배정 가능한 신청</h2>
-          <p>동행자가 직접 수락할 수 있는 화면입니다.</p>
-
-          {requests.length === 0 && <p>신청 내역이 없습니다.</p>}
-
-          {requests
-            .filter((item) => !item.worker || item.worker === "worker")
-            .map((item) => (
-              <div key={item.id} style={itemStyle}>
-                <p>
-                  <b>신청자:</b> {item.name}
-                </p>
-                <p>
-                  <b>병원:</b> {item.hospital}
-                </p>
-                <p>
-                  <b>날짜:</b> {item.date}
-                </p>
-                <p>
-                  <b>시간:</b> {item.time}
-                </p>
-                <p>
-                  <b>상태:</b> {item.status}
-                </p>
-
-                {!item.worker && (
-                  <button
-                    style={buttonStyle}
-                    onClick={() => {
-                      updateField(item.id, "worker", "worker");
-                      updateField(item.id, "status", "배정완료");
-                    }}
-                  >
-                    이 신청 수락하기
-                  </button>
-                )}
-
-                {item.worker === "worker" && (
-                  <>
-                    <p style={{ color: "#2563eb", fontWeight: "bold" }}>
-                      ✅ 내가 수락한 신청입니다.
-                    </p>
-
-                    <button
-                      style={buttonStyle}
-                      onClick={() => updateField(item.id, "status", "진행중")}
-                    >
-                      진행중으로 변경
-                    </button>
-
-                    <button
-                      style={{ ...buttonStyle, marginTop: 10 }}
-                      onClick={() => updateField(item.id, "status", "완료")}
-                    >
-                      완료로 변경
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
+        <div style={noticeBoxStyle}>
+          🔔 알림 {unreadCount > 0 && <b>({unreadCount})</b>}
         </div>
+
+        <WorkerRequestList
+          requests={requests}
+          updateField={updateField}
+          handleAcceptRequest={handleAcceptRequest}
+        />
+
+        <NotificationCenter
+          notifications={notifications}
+          markAllRead={markAllRead}
+          clearNotifications={clearNotifications}
+        />
       </div>
     );
   }
@@ -239,7 +265,10 @@ export default function App() {
           (menu) => (
             <button
               key={menu}
-              onClick={() => setActiveMenu(menu)}
+              onClick={() => {
+                setActiveMenu(menu);
+                if (menu === "알림센터") markAllRead();
+              }}
               style={{
                 ...menuButtonStyle,
                 background: activeMenu === menu ? "#2563eb" : "white",
@@ -247,6 +276,9 @@ export default function App() {
               }}
             >
               {menu}
+              {menu === "알림센터" && unreadCount > 0
+                ? ` 🔴${unreadCount}`
+                : ""}
             </button>
           )
         )}
@@ -352,16 +384,11 @@ export default function App() {
       )}
 
       {activeMenu === "알림센터" && (
-        <div style={cardStyle}>
-          <h2>🔔 알림센터</h2>
-
-          {requests.map((item) => (
-            <div key={item.id} style={itemStyle}>
-              🔔 {item.name}님 신청 / 상태: {item.status} / 동행자:{" "}
-              {item.worker || "미지정"}
-            </div>
-          ))}
-        </div>
+        <NotificationCenter
+          notifications={notifications}
+          markAllRead={markAllRead}
+          clearNotifications={clearNotifications}
+        />
       )}
 
       {activeMenu === "설정" && (
@@ -378,6 +405,69 @@ export default function App() {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function WorkerRequestList({ requests, updateField, handleAcceptRequest }) {
+  return (
+    <div style={cardStyle}>
+      <h2>📋 배정 가능한 신청</h2>
+
+      {requests.length === 0 && <p>신청 내역이 없습니다.</p>}
+
+      {requests
+        .filter((item) => !item.worker || item.worker === "worker")
+        .map((item) => (
+          <div key={item.id} style={itemStyle}>
+            <p>
+              <b>신청자:</b> {item.name}
+            </p>
+            <p>
+              <b>병원:</b> {item.hospital}
+            </p>
+            <p>
+              <b>날짜:</b> {item.date}
+            </p>
+            <p>
+              <b>시간:</b> {item.time}
+            </p>
+            <p>
+              <b>상태:</b> {item.status}
+            </p>
+
+            {!item.worker && (
+              <button
+                style={buttonStyle}
+                onClick={() => handleAcceptRequest(item)}
+              >
+                이 신청 수락하기
+              </button>
+            )}
+
+            {item.worker === "worker" && (
+              <>
+                <p style={{ color: "#2563eb", fontWeight: "bold" }}>
+                  ✅ 내가 수락한 신청입니다.
+                </p>
+
+                <button
+                  style={buttonStyle}
+                  onClick={() => updateField(item.id, "status", "진행중")}
+                >
+                  진행중으로 변경
+                </button>
+
+                <button
+                  style={{ ...buttonStyle, marginTop: 10 }}
+                  onClick={() => updateField(item.id, "status", "완료")}
+                >
+                  완료로 변경
+                </button>
+              </>
+            )}
+          </div>
+        ))}
     </div>
   );
 }
@@ -463,6 +553,42 @@ function RequestList({ requests, updateField, handleDelete, onlyWorker }) {
   );
 }
 
+function NotificationCenter({
+  notifications,
+  markAllRead,
+  clearNotifications,
+}) {
+  return (
+    <div style={cardStyle}>
+      <h2>🔔 알림센터</h2>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
+        <button onClick={markAllRead} style={smallButtonStyle}>
+          모두 읽음
+        </button>
+        <button onClick={clearNotifications} style={smallDangerButtonStyle}>
+          알림 삭제
+        </button>
+      </div>
+
+      {notifications.length === 0 && <p>알림 내역이 없습니다.</p>}
+
+      {notifications.map((noti) => (
+        <div
+          key={noti.id}
+          style={{
+            ...itemStyle,
+            background: noti.read ? "#fff" : "#eef4ff",
+          }}
+        >
+          <p style={{ margin: 0 }}>{noti.message}</p>
+          <p style={{ fontSize: 12, color: "#777" }}>{noti.time}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const pageStyle = {
   padding: "16px",
   fontFamily: "sans-serif",
@@ -529,6 +655,15 @@ const itemStyle = {
   background: "#fff",
 };
 
+const noticeBoxStyle = {
+  background: "#eef4ff",
+  border: "1px solid #c7d7ff",
+  padding: "12px",
+  borderRadius: "12px",
+  marginBottom: "15px",
+  fontWeight: "bold",
+};
+
 const inputStyle = {
   display: "block",
   width: "100%",
@@ -556,6 +691,24 @@ const buttonStyle = {
   width: "100%",
   fontSize: "16px",
   fontWeight: "bold",
+};
+
+const smallButtonStyle = {
+  background: "#2563eb",
+  color: "white",
+  border: "none",
+  padding: "10px 14px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
+const smallDangerButtonStyle = {
+  background: "red",
+  color: "white",
+  border: "none",
+  padding: "10px 14px",
+  borderRadius: "8px",
+  cursor: "pointer",
 };
 
 const logoutStyle = {
