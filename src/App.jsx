@@ -1,4 +1,3 @@
-// src/App.jsx
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -9,6 +8,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import * as XLSX from "xlsx";
 
 const ADMIN_ID = "admin";
 const ADMIN_PW = "1234";
@@ -69,7 +69,6 @@ export default function App() {
     };
 
     const newList = [newNoti, ...notifications].slice(0, 50);
-
     setNotifications(newList);
     setUnreadCount(newList.filter((n) => !n.read).length);
     localStorage.setItem("dasom_notifications", JSON.stringify(newList));
@@ -87,6 +86,44 @@ export default function App() {
     setNotifications([]);
     setUnreadCount(0);
     localStorage.removeItem("dasom_notifications");
+  };
+
+  const downloadExcel = (type) => {
+    const isSettlement = type === "settlement";
+    const targetList = isSettlement
+      ? requests.filter((r) => r.status === "완료")
+      : requests;
+
+    if (targetList.length === 0) {
+      alert("다운로드할 내역이 없습니다.");
+      return;
+    }
+
+    const excelData = targetList.map((item, index) => ({
+      번호: index + 1,
+      신청자: item.name || "",
+      연락처: item.phone || "",
+      병원명: item.hospital || "",
+      날짜: item.date || "",
+      시간: item.time || "",
+      상태: item.status || "",
+      결제상태: item.payment || "",
+      동행자: item.worker || "미지정",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      isSettlement ? "정산내역" : "신청내역"
+    );
+
+    XLSX.writeFile(
+      workbook,
+      isSettlement ? "다솜프로미스_정산내역.xlsx" : "다솜프로미스_신청내역.xlsx"
+    );
   };
 
   const handleLogin = () => {
@@ -123,7 +160,6 @@ export default function App() {
     });
 
     addNotification(`🆕 신규 신청: ${form.name}님 / ${form.hospital}`);
-
     alert("저장 완료");
 
     setForm({
@@ -146,15 +182,11 @@ export default function App() {
     });
 
     if (field === "status") {
-      addNotification(
-        `🚦 상태 변경: ${target?.name || "신청"}님 → ${value}`
-      );
+      addNotification(`🚦 상태 변경: ${target?.name || "신청"}님 → ${value}`);
     }
 
     if (field === "payment") {
-      addNotification(
-        `💳 결제 변경: ${target?.name || "신청"}님 → ${value}`
-      );
+      addNotification(`💳 결제 변경: ${target?.name || "신청"}님 → ${value}`);
     }
 
     if (field === "worker") {
@@ -178,7 +210,6 @@ export default function App() {
 
     const target = requests.find((r) => r.id === id);
     await deleteDoc(doc(db, "requests", id));
-
     addNotification(`🗑 신청 삭제: ${target?.name || "신청"}님`);
   };
 
@@ -331,6 +362,13 @@ export default function App() {
             </button>
           </div>
 
+          <div style={cardStyle}>
+            <h2>📄 엑셀 다운로드</h2>
+            <button onClick={() => downloadExcel("all")} style={buttonStyle}>
+              전체 신청 엑셀 다운로드
+            </button>
+          </div>
+
           <RequestList
             requests={requests}
             updateField={updateField}
@@ -354,6 +392,16 @@ export default function App() {
       {activeMenu === "정산관리" && (
         <div style={cardStyle}>
           <h2>📊 정산관리</h2>
+
+          <button
+            onClick={() => downloadExcel("settlement")}
+            style={buttonStyle}
+          >
+            완료 정산 엑셀 다운로드
+          </button>
+
+          <br />
+          <br />
 
           {requests.filter((r) => r.status === "완료").length === 0 && (
             <p>완료된 정산 내역이 없습니다.</p>
